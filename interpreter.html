@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="manifest" href="manifest.json">
 <title>VRS Interpreter Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root{
     /* Career Tech theme: rust accent on dark navy (variable names kept from
@@ -21,6 +24,26 @@
     --vrs-success:#22c55e;
     --vrs-warning:#f4b740;
     --vrs-border:#24365a;
+
+    /* ---- Design system tokens (typography, spacing, depth, motion) ---- */
+    --vrs-font-display:'Outfit',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;
+    --vrs-font-body:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+
+    --fs-2xs:11px; --fs-xs:12px; --fs-sm:13px; --fs-base:15px;
+    --fs-md:17px; --fs-lg:22px; --fs-xl:28px;
+
+    --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:20px;
+    --sp-6:24px; --sp-7:28px; --sp-8:32px; --sp-9:40px; --sp-10:48px;
+
+    --radius-sm:8px; --radius-md:12px; --radius-lg:16px; --radius-xl:20px;
+
+    --shadow-sm:0 1px 2px rgba(0,0,0,.3);
+    --shadow-md:0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.18);
+    --shadow-lg:0 2px 4px rgba(0,0,0,.35), 0 16px 40px rgba(0,0,0,.26);
+
+    --border-lit:rgba(255,255,255,.07);
+    --ease-standard:cubic-bezier(.4,0,.2,1);
+    --dur-fast:150ms; --dur-med:200ms; --dur-slow:220ms;
   }
   *{ box-sizing:border-box; }
   html, body{
@@ -29,9 +52,40 @@
     margin:0;
     background:var(--vrs-bg);
     color:var(--vrs-text);
-    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;
+    font-family:var(--vrs-font-body);
+    font-size:var(--fs-base);
+    line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
     overflow-x:hidden;
   }
+  h1,h2,h3{ font-family:var(--vrs-font-display); line-height:1.2; letter-spacing:-.01em; margin:0; }
+
+  :focus-visible{
+    outline:2px solid var(--vrs-purple-light);
+    outline-offset:2px;
+    border-radius:4px;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *,*::before,*::after{
+      transition-duration:.01ms !important;
+      animation-duration:.01ms !important;
+      animation-iteration-count:1 !important;
+      scroll-behavior:auto !important;
+    }
+    /* Incoming-call cues carry safety-critical information for deaf and
+       hard-of-hearing interpreters watching a muted tab, not decoration —
+       keep them animating, just at a slower, gentler pace. */
+    #incomingCallOverlay.vrs-flash,
+    #incomingCallOverlay .vrs-emoji-big,
+    #connectionBanner.vrs-banner-danger,
+    .vrs-toast.vrs-toast-enter{
+      animation-duration:1.8s !important;
+      animation-iteration-count:infinite !important;
+    }
+  }
+
   #app{
     position:relative;width:100%;
     height:100vh;height:100dvh;min-height:-webkit-fill-available;
@@ -39,149 +93,272 @@
   }
 
   .vrs-topbar{
-    display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;
-    padding:16px 20px;border-bottom:1px solid var(--vrs-border);background:var(--vrs-panel);
+    display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--sp-3);
+    padding:var(--sp-4) var(--sp-5);border-bottom:1px solid var(--vrs-border);
+    background:var(--vrs-panel);box-shadow:var(--shadow-sm);
   }
-  .vrs-brand{ display:flex;align-items:center;gap:8px;font-weight:800;font-size:16px; }
-  .vrs-brand .vrs-dot-brand{ width:9px;height:9px;border-radius:50%;background:var(--vrs-purple); }
+  .vrs-brand{ display:flex;align-items:center;gap:var(--sp-2); }
+  .vrs-brand .vrs-dot-brand{
+    width:8px;height:8px;border-radius:50%;background:var(--vrs-purple-light);
+    box-shadow:0 0 0 3px rgba(224,138,79,.15);flex:0 0 auto;
+  }
+  .vrs-brand-text{ display:flex;flex-direction:column;line-height:1.15; }
+  .vrs-brand-vrs{
+    font-family:var(--vrs-font-display);font-weight:700;font-size:var(--fs-sm);
+    letter-spacing:.08em;text-transform:uppercase;color:var(--vrs-purple-light);
+  }
+  .vrs-brand-org{
+    font-family:var(--vrs-font-display);font-weight:500;font-size:var(--fs-xs);
+    letter-spacing:.01em;color:var(--vrs-muted);
+  }
 
-  .vrs-toggle-row{ display:flex;align-items:center;gap:10px; }
+  .vrs-toggle-row{ display:flex;align-items:center;gap:var(--sp-3); }
   .vrs-switch{
-    position:relative;width:56px;height:30px;border-radius:999px;background:#3a3450;cursor:pointer;
+    /* 72x44 hit area — a compact 52x28 pill reads nicer but falls under the
+       44px minimum touch target, which is non-negotiable here. */
+    position:relative;width:72px;height:44px;border-radius:999px;background:#3a3450;cursor:pointer;
     border:1px solid var(--vrs-border);flex:0 0 auto;
+    transition:background var(--dur-med) var(--ease-standard);
   }
   .vrs-switch.vrs-on{ background:var(--vrs-success); }
   .vrs-switch .vrs-knob{
-    position:absolute;top:2px;left:2px;width:24px;height:24px;border-radius:50%;background:#fff;
-    transition:left .15s ease;
+    position:absolute;top:4px;left:4px;width:34px;height:34px;border-radius:50%;background:#fff;
+    box-shadow:var(--shadow-sm);
+    transition:left var(--dur-med) var(--ease-standard);
   }
-  .vrs-switch.vrs-on .vrs-knob{ left:28px; }
-  #onlineStatusText{ font-weight:700;font-size:14px; }
+  .vrs-switch.vrs-on .vrs-knob{ left:34px; }
+  #onlineStatusText{ font-weight:700;font-size:var(--fs-sm);letter-spacing:.01em; }
   #onlineStatusText.vrs-status-online{ color:var(--vrs-success); }
   #onlineStatusText.vrs-status-offline{ color:var(--vrs-muted); }
 
-  #interpreterIdText{ font-size:12px;color:var(--vrs-muted); }
+  #interpreterIdText{ font-size:var(--fs-xs);color:var(--vrs-muted);margin-bottom:var(--sp-1); }
 
-  .vrs-push-wrap{ display:flex;flex-direction:column;align-items:flex-end;gap:4px;margin-top:8px; }
+  .vrs-push-wrap{ display:flex;flex-direction:column;align-items:flex-end;gap:var(--sp-1);margin-top:var(--sp-2); }
   .vrs-push-btn{
-    appearance:none;border:none;border-radius:10px;padding:8px 14px;font-size:12px;font-weight:700;
-    cursor:pointer;font-family:inherit;color:#fff;white-space:nowrap;
+    appearance:none;border:none;border-radius:var(--radius-sm);padding:8px 14px;font-size:var(--fs-xs);font-weight:700;
+    cursor:pointer;font-family:var(--vrs-font-display);color:#fff;white-space:nowrap;min-height:36px;
     background:linear-gradient(135deg,var(--vrs-purple),var(--vrs-purple-dark));
+    box-shadow:var(--shadow-sm);
+    transition:opacity var(--dur-fast) var(--ease-standard), background var(--dur-fast) var(--ease-standard);
     -webkit-tap-highlight-color:transparent;
   }
   .vrs-push-btn:disabled{ opacity:.7;cursor:not-allowed; }
   .vrs-push-btn.vrs-push-on{
     background:var(--vrs-panel-2);border:1px solid var(--vrs-success);color:var(--vrs-success);
   }
-  #pushDeniedText{ font-size:11px;color:var(--vrs-danger);max-width:220px;text-align:right;line-height:1.4; }
+  #pushDeniedText{ font-size:var(--fs-2xs);color:var(--vrs-danger);max-width:220px;text-align:right;line-height:1.5; }
 
-  main{ flex:1 1 auto;min-height:0;display:flex;flex-direction:column;padding:20px; }
+  main{ flex:1 1 auto;min-height:0;display:flex;flex-direction:column;padding:var(--sp-6); }
 
-  #screen-waiting{ display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;text-align:center; }
-  #screen-waiting .vrs-emoji-big{ font-size:56px;margin-bottom:12px; }
-  #screen-waiting h2{ margin:0 0 6px; }
-  #screen-waiting p{ color:var(--vrs-muted);max-width:420px; }
+  #screen-waiting{ display:flex;flex-direction:column;align-items:center;flex:1;text-align:center; }
+  #screen-waiting .vrs-emoji-big{ font-size:52px;margin-bottom:var(--sp-3); }
+  #screen-waiting h2{ margin:0 0 var(--sp-2);font-size:var(--fs-lg); }
+  #screen-waiting p{ color:var(--vrs-muted);max-width:440px;font-size:var(--fs-base); }
 
-  #queueList{ width:100%;max-width:520px;margin:18px auto 0;display:flex;flex-direction:column;gap:10px; }
-  .vrs-queue-item{
-    background:var(--vrs-panel);border:1px solid var(--vrs-border);border-radius:12px;
-    padding:12px 14px;font-size:14px;color:var(--vrs-muted);text-align:left;
+  /* ---- Waiting-room panel ---- */
+  .vrs-waitingroom{
+    width:100%;max-width:560px;margin:var(--sp-7) auto 0;text-align:left;
+  }
+  .vrs-waitingroom-head{
+    display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--sp-3);
+    padding:0 var(--sp-1);
+  }
+  .vrs-waitingroom-title{
+    font-family:var(--vrs-font-display);font-weight:600;font-size:var(--fs-xs);
+    letter-spacing:.06em;text-transform:uppercase;color:var(--vrs-muted);
+  }
+  .vrs-waitingroom-count{
+    background:var(--vrs-purple);color:#fff;border-radius:999px;font-size:var(--fs-2xs);font-weight:700;
+    padding:2px 9px;min-width:20px;text-align:center;
+  }
+  #queueList{ width:100%;display:flex;flex-direction:column;gap:var(--sp-2); }
+
+  .vrs-queue-empty{
+    background:var(--vrs-panel);border:1px dashed var(--vrs-border);border-radius:var(--radius-md);
+    padding:var(--sp-5);font-size:var(--fs-sm);color:var(--vrs-muted);text-align:center;
   }
 
-  /* ---- Incoming call full-screen flashing overlay ---- */
+  .vrs-queue-item{
+    display:flex;align-items:center;gap:var(--sp-3);
+    background:var(--vrs-panel);border:1px solid var(--vrs-border);border-top-color:var(--border-lit);
+    border-radius:var(--radius-md);box-shadow:var(--shadow-sm);
+    padding:var(--sp-3) var(--sp-4);font-size:var(--fs-sm);color:var(--vrs-text);text-align:left;
+    transition:border-color var(--dur-med) var(--ease-standard);
+  }
+  .vrs-queue-item-icon{
+    width:38px;height:38px;border-radius:50%;background:var(--vrs-panel-2);
+    display:flex;align-items:center;justify-content:center;font-size:18px;flex:0 0 auto;
+  }
+  .vrs-queue-item-body{ flex:1 1 auto;min-width:0; }
+  .vrs-queue-item-room{
+    font-family:var(--vrs-font-display);font-weight:600;font-size:var(--fs-base);
+    display:flex;align-items:center;gap:var(--sp-2);
+  }
+  .vrs-queue-item-room .vrs-cam-flag{ font-size:var(--fs-xs);color:var(--vrs-muted);font-weight:500; }
+  .vrs-queue-item-meta{ font-size:var(--fs-xs);color:var(--vrs-muted);margin-top:2px; }
+  .vrs-queue-item-wait{
+    font-variant-numeric:tabular-nums;font-weight:700;color:var(--vrs-warning);
+  }
+  .vrs-queue-item.vrs-queue-oldest .vrs-queue-item-wait{ color:var(--vrs-danger); }
+  .vrs-queue-item.vrs-queue-declined{
+    opacity:.6;border-style:dashed;
+  }
+  .vrs-queue-item.vrs-queue-declined .vrs-queue-item-icon{ background:#3a1420; }
+  .vrs-queue-item-status{
+    flex:0 0 auto;font-size:var(--fs-2xs);font-weight:700;text-transform:uppercase;letter-spacing:.05em;
+    padding:3px 8px;border-radius:999px;
+  }
+  .vrs-queue-item-status.vrs-status-waiting{ background:rgba(244,183,64,.16);color:var(--vrs-warning); }
+  .vrs-queue-item-status.vrs-status-declined{ background:rgba(224,64,90,.14);color:#ff9daa; }
+
+  /* ---- Incoming call full-screen flashing overlay (idle only) ---- */
   #incomingCallOverlay{
     position:fixed;inset:0;z-index:500;min-height:100vh;
     display:none;flex-direction:column;align-items:center;justify-content:center;
     background:var(--vrs-purple-dark);
-    text-align:center;padding:24px;
+    text-align:center;padding:var(--sp-6);
   }
   #incomingCallOverlay.vrs-visible{ display:flex; }
-  #incomingCallOverlay.vrs-flash{ animation:vrsFlashBg 0.9s ease-in-out infinite; }
+  #incomingCallOverlay.vrs-flash{ animation:vrsFlashBg 1.1s cubic-bezier(.4,0,.2,1) infinite; }
   @keyframes vrsFlashBg{
     0%,100%{ background:var(--vrs-purple-dark); }
-    50%{ background:#a4192f; }
+    50%{ background:#8a1c30; }
   }
-  #incomingCallOverlay .vrs-emoji-big{ font-size:72px;margin-bottom:10px;animation:vrsIconShake 0.6s ease-in-out infinite; }
+  #incomingCallOverlay .vrs-emoji-big{ font-size:68px;margin-bottom:var(--sp-3);animation:vrsIconShake 0.7s cubic-bezier(.4,0,.2,1) infinite; }
   @keyframes vrsIconShake{
     0%,100%{ transform:rotate(-6deg); }
     50%{ transform:rotate(6deg); }
   }
-  #incomingCallOverlay h2{ font-size:26px;margin:0 0 6px; }
-  #incomingCallOverlay p{ color:#efe6ff;margin:0 0 24px;font-size:15px; }
-  .vrs-incoming-actions{ display:flex;gap:16px;flex-wrap:wrap;justify-content:center; }
+  #incomingCallOverlay h2{ font-size:var(--fs-xl);margin:0 0 var(--sp-2); }
+  #incomingCallOverlay p{ color:#f3e7de;margin:0 0 var(--sp-7);font-size:var(--fs-md); }
+  .vrs-incoming-actions{ display:flex;gap:var(--sp-4);flex-wrap:wrap;justify-content:center; }
   .vrs-incoming-btn{
-    border:none;border-radius:14px;padding:18px 30px;font-size:18px;font-weight:800;cursor:pointer;
+    border:none;border-radius:var(--radius-lg);padding:18px 30px;font-size:var(--fs-md);font-weight:700;
+    font-family:var(--vrs-font-display);cursor:pointer;min-height:44px;box-shadow:var(--shadow-lg);
+    transition:transform var(--dur-fast) var(--ease-standard), box-shadow var(--dur-fast) var(--ease-standard);
     -webkit-tap-highlight-color:transparent;
   }
+  .vrs-incoming-btn:active{ transform:scale(.97); }
   .vrs-incoming-accept{ background:var(--vrs-success);color:#08210f; }
   .vrs-incoming-decline{ background:#fff;color:var(--vrs-danger); }
+
+  /* ---- Side notification rail (shown while already on a call) ---- */
+  #sideNotifyRail{
+    position:fixed;top:var(--sp-5);right:var(--sp-5);z-index:700;
+    width:min(300px, calc(100vw - 32px));
+    display:flex;flex-direction:column;gap:var(--sp-2);
+    pointer-events:none;
+  }
+  .vrs-toast{
+    pointer-events:auto;
+    background:var(--vrs-panel);border:1px solid var(--vrs-purple);border-top-color:var(--border-lit);
+    border-radius:var(--radius-md);box-shadow:var(--shadow-lg);
+    padding:var(--sp-3) var(--sp-4);
+    display:flex;align-items:flex-start;gap:var(--sp-3);
+    animation:vrsToastIn var(--dur-slow) var(--ease-standard);
+  }
+  @keyframes vrsToastIn{
+    0%{ transform:translateX(24px);opacity:0; }
+    100%{ transform:translateX(0);opacity:1; }
+  }
+  .vrs-toast-icon{
+    width:34px;height:34px;border-radius:50%;flex:0 0 auto;
+    background:linear-gradient(135deg,var(--vrs-purple),var(--vrs-purple-dark));
+    display:flex;align-items:center;justify-content:center;font-size:16px;
+    animation:vrsToastPulse 1.4s cubic-bezier(.4,0,.2,1) infinite;
+  }
+  @keyframes vrsToastPulse{
+    0%,100%{ box-shadow:0 0 0 0 rgba(178,93,34,.5); }
+    50%{ box-shadow:0 0 0 8px rgba(178,93,34,0); }
+  }
+  .vrs-toast-body{ flex:1 1 auto;min-width:0; }
+  .vrs-toast-title{ font-family:var(--vrs-font-display);font-weight:700;font-size:var(--fs-sm);margin-bottom:2px; }
+  .vrs-toast-sub{ font-size:var(--fs-xs);color:var(--vrs-muted);line-height:1.5; }
+  .vrs-toast-badge{
+    flex:0 0 auto;background:var(--vrs-danger);color:#fff;border-radius:999px;
+    font-size:var(--fs-2xs);font-weight:700;min-width:18px;height:18px;padding:0 5px;
+    display:flex;align-items:center;justify-content:center;
+  }
+  #sideNotifyRail[hidden]{ display:none !important; }
 
   /* ---- Call screen (mirrors call.html styling) ---- */
   #screen-call{ display:none;flex-direction:column;flex:1;min-height:0;padding:0; }
   #screen-call.vrs-visible{ display:flex; }
   #connectionBanner{
-    flex:0 0 auto;padding:8px 16px;text-align:center;font-size:13px;font-weight:600;
+    flex:0 0 auto;padding:var(--sp-2) var(--sp-4);text-align:center;font-size:var(--fs-sm);font-weight:600;
     background:var(--vrs-panel-2);color:var(--vrs-muted);border-bottom:1px solid var(--vrs-border);
+    transition:background var(--dur-med) var(--ease-standard), color var(--dur-med) var(--ease-standard);
   }
   #connectionBanner.vrs-banner-warning{ background:#4a3a12;color:var(--vrs-warning); }
-  #connectionBanner.vrs-banner-danger{ background:#3a1420;color:#ffb3c0;animation:vrsFlashBanner 1s ease-in-out infinite; }
+  #connectionBanner.vrs-banner-danger{ background:#3a1420;color:#ffb3c0;animation:vrsFlashBanner 1.2s cubic-bezier(.4,0,.2,1) infinite; }
   #connectionBanner.vrs-banner-success{ background:#123a24;color:#7cf0ad; }
-  @keyframes vrsFlashBanner{ 0%,100%{ opacity:1; } 50%{ opacity:.55; } }
+  @keyframes vrsFlashBanner{ 0%,100%{ opacity:1; } 50%{ opacity:.6; } }
 
   #videoGrid{
-    flex:1 1 auto;min-height:200px;display:grid;gap:8px;padding:10px;grid-template-columns:1fr;
+    flex:1 1 auto;min-height:200px;display:grid;gap:var(--sp-2);padding:var(--sp-3);grid-template-columns:1fr;
   }
   #videoGrid[data-count="2"]{ grid-template-columns:1fr 1fr; }
   #videoGrid[data-count="3"]{ grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr; }
   #videoGrid[data-count="3"] .vrs-tile:first-child{ grid-column:1 / span 2; }
 
-  .vrs-tile{ position:relative;background:#000;border-radius:14px;overflow:hidden;min-height:140px;border:1px solid var(--vrs-border); }
+  .vrs-tile{ position:relative;background:#000;border-radius:var(--radius-md);overflow:hidden;min-height:140px;border:1px solid var(--vrs-border);box-shadow:var(--shadow-sm); }
   .vrs-tile video{ width:100%;height:100%;object-fit:cover;display:block; }
-  .vrs-tile-overlay{ position:absolute;left:8px;bottom:8px;display:flex;align-items:center;gap:6px;background:rgba(0,0,0,0.55);padding:5px 10px;border-radius:999px;font-size:12px;font-weight:600; }
-  .vrs-dot{ width:8px;height:8px;border-radius:50%;background:var(--vrs-muted); }
+  .vrs-tile-overlay{ position:absolute;left:var(--sp-2);bottom:var(--sp-2);display:flex;align-items:center;gap:var(--sp-2);background:rgba(10,18,32,0.7);backdrop-filter:blur(2px);padding:5px 11px;border-radius:999px;font-size:var(--fs-xs);font-weight:600; }
+  .vrs-dot{ width:8px;height:8px;border-radius:50%;background:var(--vrs-muted);transition:background var(--dur-med) var(--ease-standard); }
   .vrs-dot-good{ background:var(--vrs-success); }
   .vrs-dot-bad{ background:var(--vrs-danger); }
   .vrs-dot-pending{ background:var(--vrs-warning); }
-  .vrs-tile-nomedia{ position:absolute;inset:0;min-height:140px;display:none;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--vrs-muted);font-size:13px;background:#111018; }
+  .vrs-tile-nomedia{ position:absolute;inset:0;min-height:140px;display:none;flex-direction:column;align-items:center;justify-content:center;gap:var(--sp-2);color:var(--vrs-muted);font-size:var(--fs-sm);background:#111018; }
   .vrs-tile.vrs-no-media .vrs-tile-nomedia{ display:flex; }
   .vrs-tile.vrs-no-media video{ display:none; }
 
   #chatPanel{
     position:fixed;right:0;top:0;bottom:0;width:min(340px, 100%);background:var(--vrs-panel);
     border-left:1px solid var(--vrs-border);display:flex;flex-direction:column;
-    transform:translateX(100%);transition:transform .2s ease;z-index:600;
+    box-shadow:var(--shadow-lg);
+    transform:translateX(100%);transition:transform var(--dur-slow) var(--ease-standard);z-index:600;
   }
   #chatPanel.vrs-open{ transform:translateX(0); }
-  .vrs-chat-header{ padding:14px 16px;border-bottom:1px solid var(--vrs-border);display:flex;align-items:center;justify-content:space-between;font-weight:700; }
-  #chatMessages{ flex:1 1 auto;overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:10px;min-height:0; }
-  .vrs-chat-msg{ max-width:88%;background:var(--vrs-panel-2);border-radius:12px;padding:8px 12px;font-size:14px; }
+  .vrs-chat-header{ padding:var(--sp-4);border-bottom:1px solid var(--vrs-border);display:flex;align-items:center;justify-content:space-between;font-family:var(--vrs-font-display);font-weight:700; }
+  #chatMessages{ flex:1 1 auto;overflow-y:auto;padding:var(--sp-3) var(--sp-4);display:flex;flex-direction:column;gap:var(--sp-3);min-height:0; }
+  .vrs-chat-msg{ max-width:88%;background:var(--vrs-panel-2);border-radius:var(--radius-md);padding:var(--sp-2) var(--sp-3);font-size:var(--fs-base);box-shadow:var(--shadow-sm); }
   .vrs-chat-msg.vrs-mine{ align-self:flex-end;background:var(--vrs-purple-dark); }
-  .vrs-chat-msg .vrs-chat-role{ display:block;font-size:11px;color:var(--vrs-muted);margin-bottom:2px;font-weight:700;text-transform:uppercase;letter-spacing:.04em; }
-  .vrs-chat-input-row{ display:flex;gap:8px;padding:12px;border-top:1px solid var(--vrs-border); }
-  #chatInput{ flex:1;min-width:0;background:var(--vrs-panel-2);border:1px solid var(--vrs-border);color:var(--vrs-text);border-radius:10px;padding:10px 12px;font-size:14px; }
+  .vrs-chat-msg .vrs-chat-role{ display:block;font-size:var(--fs-2xs);color:var(--vrs-muted);margin-bottom:2px;font-weight:700;text-transform:uppercase;letter-spacing:.06em; }
+  /* --vrs-muted only hits 3:1 against --vrs-purple-dark — too low for small
+     text (needs 4.5:1). Use a brighter tone on "mine" bubbles. */
+  .vrs-chat-msg.vrs-mine .vrs-chat-role{ color:#f6dfcf; }
+  .vrs-chat-input-row{ display:flex;gap:var(--sp-2);padding:var(--sp-3);border-top:1px solid var(--vrs-border); }
+  #chatInput{ flex:1;min-width:0;min-height:44px;background:var(--vrs-panel-2);border:1px solid var(--vrs-border);color:var(--vrs-text);border-radius:var(--radius-sm);padding:10px 12px;font-size:var(--fs-base);transition:border-color var(--dur-fast) var(--ease-standard); }
+  #chatInput:focus{ border-color:var(--vrs-purple-light); }
 
   #controlBar{
-    flex:0 0 auto;display:flex;gap:10px;flex-wrap:wrap;justify-content:center;
-    padding:12px;border-top:1px solid var(--vrs-border);background:var(--vrs-panel);
-    padding-bottom:max(12px, env(safe-area-inset-bottom));
+    flex:0 0 auto;display:flex;gap:var(--sp-2);flex-wrap:wrap;justify-content:center;
+    padding:var(--sp-3);border-top:1px solid var(--vrs-border);border-top-color:var(--border-lit);
+    background:var(--vrs-panel);box-shadow:0 -1px 0 rgba(0,0,0,.2);
+    padding-bottom:max(var(--sp-3), env(safe-area-inset-bottom));
   }
   .vrs-ctrl-btn{
     position:relative;display:flex;flex-direction:column;align-items:center;gap:3px;
     background:var(--vrs-panel-2);border:1px solid var(--vrs-border);color:var(--vrs-text);
-    border-radius:12px;padding:10px 14px;font-size:11px;font-weight:600;cursor:pointer;min-width:64px;
+    border-radius:var(--radius-md);padding:var(--sp-2) var(--sp-3);font-size:var(--fs-2xs);font-weight:600;
+    letter-spacing:.02em;cursor:pointer;min-width:64px;min-height:44px;
+    transition:background var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard), transform var(--dur-fast) var(--ease-standard);
   }
+  .vrs-ctrl-btn:hover{ background:var(--vrs-border); }
+  .vrs-ctrl-btn:active{ transform:scale(.97); }
   .vrs-ctrl-btn .vrs-ctrl-icon{ font-size:20px; }
   .vrs-ctrl-btn.vrs-ctrl-off{ background:#3a1420;border-color:var(--vrs-danger); }
   .vrs-ctrl-btn.vrs-ctrl-danger{ background:var(--vrs-danger);border-color:var(--vrs-danger); }
   #chatUnreadBadge{
     position:absolute;top:2px;right:2px;background:var(--vrs-danger);color:#fff;border-radius:999px;
     font-size:10px;min-width:16px;height:16px;display:flex;align-items:center;justify-content:center;padding:0 3px;
+    box-shadow:0 0 0 2px var(--vrs-panel-2);
   }
   #chatUnreadBadge[hidden]{ display:none; }
 
   .vrs-camera-error{
-    background:#3a1420;border:1px solid var(--vrs-danger);color:#ffd7de;border-radius:12px;
-    padding:14px;margin:0 auto 14px;max-width:420px;font-size:14px;line-height:1.5;
+    background:#3a1420;border:1px solid var(--vrs-danger);color:#ffd7de;border-radius:var(--radius-md);
+    padding:var(--sp-4);margin:0 auto var(--sp-4);max-width:420px;font-size:var(--fs-sm);line-height:1.55;box-shadow:var(--shadow-sm);
   }
 
   [hidden]{ display:none !important; }
@@ -189,28 +366,34 @@
   #vrsGateOverlay{
     position:fixed;inset:0;z-index:9999;background:var(--vrs-bg);
     display:flex;flex-direction:column;align-items:center;justify-content:center;
-    padding:24px;text-align:center;
+    padding:var(--sp-6);text-align:center;
   }
   #vrsGateOverlay.vrs-gate-hidden{ display:none; }
   #vrsGateOverlay .vrs-gate-card{
-    background:var(--vrs-panel);border:1px solid var(--vrs-border);border-radius:16px;
-    padding:32px 28px;max-width:420px;width:100%;
+    background:var(--vrs-panel);border:1px solid var(--vrs-border);border-top-color:var(--border-lit);
+    border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);
+    padding:var(--sp-8) var(--sp-7);max-width:420px;width:100%;
   }
-  #vrsGateOverlay h2{ margin:0 0 8px;font-size:22px; }
-  #vrsGateOverlay p{ margin:0 0 20px;color:var(--vrs-muted);font-size:14px;line-height:1.6; }
+  #vrsGateOverlay h2{ margin:0 0 var(--sp-2);font-size:var(--fs-lg); }
+  #vrsGateOverlay p{ margin:0 0 var(--sp-5);color:var(--vrs-muted);font-size:var(--fs-sm);line-height:1.6; }
   #vrsGateInput{
-    width:100%;padding:14px 16px;font-size:17px;border-radius:10px;
+    width:100%;min-height:44px;padding:14px 16px;font-size:var(--fs-md);border-radius:var(--radius-sm);
     border:1px solid var(--vrs-border);background:var(--vrs-panel-2);color:var(--vrs-text);
-    text-align:center;letter-spacing:.5px;
+    text-align:center;letter-spacing:.5px;font-family:var(--vrs-font-display);
+    transition:border-color var(--dur-fast) var(--ease-standard);
   }
-  #vrsGateInput:focus{ outline:2px solid var(--vrs-purple);outline-offset:1px; }
+  #vrsGateInput:focus{ outline:2px solid var(--vrs-purple);outline-offset:1px;border-color:var(--vrs-purple); }
   #vrsGateBtn{
-    width:100%;margin-top:14px;padding:14px 16px;font-size:16px;font-weight:700;
-    border:none;border-radius:10px;cursor:pointer;color:#fff;
+    width:100%;margin-top:var(--sp-4);padding:14px 16px;font-size:var(--fs-base);font-weight:700;
+    min-height:44px;font-family:var(--vrs-font-display);
+    border:none;border-radius:var(--radius-sm);cursor:pointer;color:#fff;
+    box-shadow:0 1px 2px rgba(0,0,0,.35), 0 8px 20px rgba(178,93,34,0.38);
+    transition:box-shadow var(--dur-fast) var(--ease-standard), transform var(--dur-fast) var(--ease-standard);
     background:linear-gradient(135deg,var(--vrs-purple),var(--vrs-purple-dark));
   }
+  #vrsGateBtn:active{ transform:scale(.98); }
   #vrsGateBtn:disabled{ opacity:.5;cursor:not-allowed; }
-  #vrsGateError{ margin-top:14px;min-height:20px;color:var(--vrs-danger);font-size:14px;font-weight:600; }
+  #vrsGateError{ margin-top:var(--sp-4);min-height:20px;color:var(--vrs-danger);font-size:var(--fs-sm);font-weight:600; }
 </style>
 </head>
 <body>
@@ -218,7 +401,13 @@
   <div id="vrs-banner-host"></div>
 
   <header class="vrs-topbar">
-    <div class="vrs-brand"><span class="vrs-dot-brand"></span> Interpreter Dashboard</div>
+    <div class="vrs-brand">
+      <span class="vrs-dot-brand" aria-hidden="true"></span>
+      <span class="vrs-brand-text">
+        <span class="vrs-brand-vrs">VRS &middot; Interpreter Dashboard</span>
+        <span class="vrs-brand-org">Career Tech High Academy</span>
+      </span>
+    </div>
     <div>
       <div id="interpreterIdText"></div>
       <div class="vrs-toggle-row">
@@ -239,7 +428,13 @@
       <div class="vrs-emoji-big" aria-hidden="true">🤟</div>
       <h2 id="waitingTitle">You're Offline</h2>
       <p id="waitingSubtitle">Toggle the switch above to go online and start receiving calls.</p>
-      <div id="queueList"></div>
+      <div class="vrs-waitingroom">
+        <div class="vrs-waitingroom-head">
+          <span class="vrs-waitingroom-title">Waiting Room</span>
+          <span class="vrs-waitingroom-count" id="queueCountBadge" hidden>0</span>
+        </div>
+        <div id="queueList"></div>
+      </div>
     </section>
 
     <section id="screen-call">
@@ -275,6 +470,8 @@
       <button type="button" class="vrs-incoming-btn vrs-incoming-decline" id="btnDeclineCall">Decline</button>
     </div>
   </div>
+
+  <div id="sideNotifyRail" aria-live="polite" hidden></div>
 </div>
 
 <div id="vrsGateOverlay">
@@ -312,12 +509,15 @@ try {
   var waitingTitle = document.getElementById('waitingTitle');
   var waitingSubtitle = document.getElementById('waitingSubtitle');
   var queueList = document.getElementById('queueList');
+  var queueCountBadge = document.getElementById('queueCountBadge');
   var screenWaiting = document.getElementById('screen-waiting');
   var screenCall = document.getElementById('screen-call');
   var incomingCallOverlay = document.getElementById('incomingCallOverlay');
   var incomingCallInfo = document.getElementById('incomingCallInfo');
   var btnAcceptCall = document.getElementById('btnAcceptCall');
   var btnDeclineCall = document.getElementById('btnDeclineCall');
+  var sideNotifyRail = document.getElementById('sideNotifyRail');
+  var vrsTopbarEl = document.querySelector('.vrs-topbar');
 
   var pushWrap = document.getElementById('pushWrap');
   var btnEnablePush = document.getElementById('btnEnablePush');
@@ -508,19 +708,198 @@ try {
     if (queueUnsub) { queueUnsub(); queueUnsub = null; }
     currentQueueSnapshot = [];
     renderQueueList();
+    clearSideNotifications();
+  }
+
+  // Waiting callers, oldest first. Defensive against a missing/empty
+  // snapshot or entries lacking fields — nothing here should ever throw.
+  function getSortedWaiting() {
+    var list = (currentQueueSnapshot || []).filter(function (q) {
+      return q && q.roomId && q.status === 'waiting';
+    });
+    list.sort(function (a, b) { return (a.createdAt || 0) - (b.createdAt || 0); });
+    return list;
+  }
+
+  function formatWaitTime(createdAt) {
+    var secs = Math.max(0, Math.floor((Date.now() - (createdAt || Date.now())) / 1000));
+    var m = Math.floor(secs / 60);
+    var s = secs % 60;
+    return 'waiting ' + m + ':' + (s < 10 ? '0' : '') + s;
+  }
+
+  function buildQueueItem(q, isOldest, isDeclined) {
+    var item = document.createElement('div');
+    item.className = 'vrs-queue-item' + (isOldest ? ' vrs-queue-oldest' : '') + (isDeclined ? ' vrs-queue-declined' : '');
+
+    var icon = document.createElement('div');
+    icon.className = 'vrs-queue-item-icon';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.textContent = isDeclined ? '🚫' : '🤟';
+
+    var body = document.createElement('div');
+    body.className = 'vrs-queue-item-body';
+
+    var roomRow = document.createElement('div');
+    roomRow.className = 'vrs-queue-item-room';
+    var roomLabel = document.createElement('span');
+    roomLabel.textContent = 'Room ' + (q.roomId || '----');
+    roomRow.appendChild(roomLabel);
+    if (q.hasCamera === false) {
+      var camFlag = document.createElement('span');
+      camFlag.className = 'vrs-cam-flag';
+      camFlag.textContent = 'no camera';
+      roomRow.appendChild(camFlag);
+    }
+    body.appendChild(roomRow);
+
+    var meta = document.createElement('div');
+    meta.className = 'vrs-queue-item-meta';
+    meta.textContent = roleLabel(q.callerRole || 'deaf');
+    body.appendChild(meta);
+
+    item.appendChild(icon);
+    item.appendChild(body);
+
+    if (isDeclined) {
+      var status = document.createElement('span');
+      status.className = 'vrs-queue-item-status vrs-status-declined';
+      status.textContent = 'Declined';
+      item.appendChild(status);
+    } else {
+      var wait = document.createElement('span');
+      wait.className = 'vrs-queue-item-wait';
+      wait.textContent = formatWaitTime(q.createdAt);
+      item.appendChild(wait);
+    }
+
+    return item;
   }
 
   function renderQueueList() {
+    if (!queueList) return;
     queueList.innerHTML = '';
-    var waiting = currentQueueSnapshot.filter(function (q) { return q.status === 'waiting'; });
-    if (!isOnline || waiting.length === 0) return;
-    waiting.forEach(function (q) {
-      var item = document.createElement('div');
-      item.className = 'vrs-queue-item';
-      var secs = Math.max(0, Math.floor((Date.now() - (q.createdAt || Date.now())) / 1000));
-      item.textContent = 'Waiting call — room ' + q.roomId + ' (' + secs + 's ago)';
-      queueList.appendChild(item);
+
+    if (!isOnline) {
+      if (queueCountBadge) queueCountBadge.hidden = true;
+      return;
+    }
+
+    var waiting = getSortedWaiting();
+
+    if (queueCountBadge) {
+      if (waiting.length > 0) {
+        queueCountBadge.hidden = false;
+        queueCountBadge.textContent = String(waiting.length);
+      } else {
+        queueCountBadge.hidden = true;
+      }
+    }
+
+    // Recently-declined calls, so the interpreter has a visible record
+    // instead of the call silently vanishing from the list. Merge the local
+    // declinedRoomIds record with any 'declined' entries still in the live
+    // queue snapshot, keep only the last 10 minutes, newest first, capped.
+    var declinedByRoom = {};
+    (currentQueueSnapshot || []).forEach(function (q) {
+      if (q && q.roomId && q.status === 'declined') declinedByRoom[q.roomId] = q;
     });
+    Object.keys(declinedRoomIds || {}).forEach(function (rid) {
+      if (!declinedByRoom[rid]) declinedByRoom[rid] = { roomId: rid, status: 'declined' };
+    });
+    var now = Date.now();
+    var TEN_MIN = 10 * 60 * 1000;
+    var declinedList = Object.keys(declinedByRoom).map(function (rid) { return declinedByRoom[rid]; })
+      .filter(function (q) {
+        var ts = (declinedRoomIds && declinedRoomIds[q.roomId]) || q.createdAt || 0;
+        return ts > 0 && (now - ts) < TEN_MIN;
+      })
+      .sort(function (a, b) {
+        var ta = (declinedRoomIds && declinedRoomIds[a.roomId]) || a.createdAt || 0;
+        var tb = (declinedRoomIds && declinedRoomIds[b.roomId]) || b.createdAt || 0;
+        return tb - ta;
+      })
+      .slice(0, 5);
+
+    if (waiting.length === 0 && declinedList.length === 0) {
+      var empty = document.createElement('div');
+      empty.className = 'vrs-queue-empty';
+      empty.textContent = 'No callers waiting right now.';
+      queueList.appendChild(empty);
+      return;
+    }
+
+    waiting.forEach(function (q, idx) {
+      queueList.appendChild(buildQueueItem(q, idx === 0, false));
+    });
+    declinedList.forEach(function (q) {
+      queueList.appendChild(buildQueueItem(q, false, true));
+    });
+  }
+
+  // ---- Side notification rail (waiting callers while already on a call) ----
+  function clearSideNotifications() {
+    if (!sideNotifyRail) return;
+    sideNotifyRail.innerHTML = '';
+    sideNotifyRail.hidden = true;
+  }
+
+  function renderSideNotifications() {
+    if (!sideNotifyRail) return;
+    if (!isOnline || !roomId) { clearSideNotifications(); return; }
+
+    var waiting = getSortedWaiting();
+    if (waiting.length === 0) { clearSideNotifications(); return; }
+
+    var primary = waiting[0];
+    var extra = waiting.length - 1;
+
+    sideNotifyRail.innerHTML = '';
+    sideNotifyRail.hidden = false;
+
+    // The topbar isn't fixed and its height varies with content (ID text,
+    // push-alert button, wrapped brand line), so dock the rail just below
+    // it rather than a guessed pixel offset that would overlap on narrow
+    // screens.
+    try {
+      if (vrsTopbarEl) {
+        var topbarBottom = vrsTopbarEl.getBoundingClientRect().bottom;
+        sideNotifyRail.style.top = Math.max(12, topbarBottom + 12) + 'px';
+      }
+    } catch (err) { /* fall back to the CSS default top */ }
+
+    var toast = document.createElement('div');
+    toast.className = 'vrs-toast';
+
+    var icon = document.createElement('div');
+    icon.className = 'vrs-toast-icon';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.textContent = '🤟';
+
+    var body = document.createElement('div');
+    body.className = 'vrs-toast-body';
+    var title = document.createElement('div');
+    title.className = 'vrs-toast-title';
+    title.textContent = 'Deaf caller waiting';
+    var sub = document.createElement('div');
+    sub.className = 'vrs-toast-sub';
+    sub.textContent = 'Room ' + (primary.roomId || '----') + ' — ' + formatWaitTime(primary.createdAt) +
+      (primary.hasCamera === false ? ' · no camera' : '');
+    body.appendChild(title);
+    body.appendChild(sub);
+
+    toast.appendChild(icon);
+    toast.appendChild(body);
+
+    if (extra > 0) {
+      var badge = document.createElement('span');
+      badge.className = 'vrs-toast-badge';
+      badge.textContent = '+' + extra;
+      badge.setAttribute('aria-label', extra + ' more caller' + (extra === 1 ? '' : 's') + ' waiting');
+      toast.appendChild(badge);
+    }
+
+    sideNotifyRail.appendChild(toast);
   }
 
   // ---- Incoming-call alerting ----
@@ -611,8 +990,20 @@ try {
   }
 
   function maybeShowIncomingCall() {
-    if (!isOnline || activeIncomingRoomId || roomId) return; // already ringing or on a call
-    var waiting = currentQueueSnapshot.find(function (q) { return q.status === 'waiting'; });
+    if (!isOnline) { clearSideNotifications(); return; }
+
+    if (roomId) {
+      // Already on a call — the full-screen overlay would interrupt an
+      // active interpretation, so a new waiting caller surfaces as a
+      // non-blocking side notification instead.
+      renderSideNotifications();
+      return;
+    }
+
+    clearSideNotifications();
+    if (activeIncomingRoomId) return; // already ringing full-screen
+
+    var waiting = getSortedWaiting()[0];
     if (waiting) {
       showIncomingCall(waiting);
     }
@@ -871,6 +1262,12 @@ try {
 
     var stray = screenCall.querySelector('.vrs-camera-error');
     if (stray) stray.remove();
+
+    // Back to idle — re-evaluate so a caller who was waiting during the call
+    // now surfaces via the normal full-screen overlay instead of the rail.
+    clearSideNotifications();
+    renderQueueList();
+    maybeShowIncomingCall();
   }
 
   // ---- Wire up ----
@@ -906,7 +1303,9 @@ try {
     });
 
     setInterval(function () {
-      if (isOnline) renderQueueList();
+      if (!isOnline) return;
+      renderQueueList();
+      maybeShowIncomingCall();
     }, 5000);
   }
 
