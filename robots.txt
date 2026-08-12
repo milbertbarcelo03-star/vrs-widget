@@ -1,0 +1,6 @@
+# This site is an unofficial demonstration mock-up of a VRS accessibility
+# widget, prepared for review by Career Tech High Academy Charter School.
+# It is not the school's official website (careertechguam.org) and must not
+# be indexed by search engines.
+User-agent: *
+Disallow: /
