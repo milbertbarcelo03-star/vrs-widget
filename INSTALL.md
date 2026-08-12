@@ -72,10 +72,14 @@ Calls ring to whoever has the **interpreter dashboard** open:
 - Hosted copy: `https://milbertbarcelo03-star.github.io/vrs-widget/interpreter.html`
 - Self-hosted: `https://YOUR-SITE/vrs-widget/interpreter.html`
 
-The interpreter opens that page, switches the toggle to **Online**, and keeps
-the tab open. Incoming calls flash on screen with Accept/Decline. If no
-interpreter is online, callers see a "waiting for an interpreter" screen until
-one accepts or they cancel.
+The dashboard is protected by an access phrase, since whoever opens it receives
+live calls from deaf callers. The interpreter enters the phrase once per browser
+session, switches the toggle to **Online**, and keeps the tab open. Incoming
+calls flash on screen with Accept/Decline. If no interpreter is online, callers
+see a "waiting for an interpreter" screen until one accepts or they cancel.
+
+**The access phrase is supplied separately — please don't post it on a public
+page.** Contact Milbert if you need it re-issued or changed.
 
 ---
 
@@ -96,9 +100,11 @@ one accepts or they cancel.
   school, and office networks work fine, but some strict corporate firewalls,
   VPNs, and cellular carriers can block the direct video connection. A
   production version would add a TURN relay server for full reliability.
-- **No accounts yet:** anyone with the interpreter dashboard link can go
-  online as the interpreter, and anyone with a room link can join that call.
-  Keep the dashboard link internal during the pilot.
+- **Access control:** the interpreter dashboard requires an access phrase, and
+  all database access requires an authenticated session with validated,
+  size-capped data. There are not yet per-user accounts, so anyone holding the
+  access phrase can act as the interpreter, and anyone holding a room link can
+  join that specific call. Keep both internal during the pilot.
 
 ---
 
