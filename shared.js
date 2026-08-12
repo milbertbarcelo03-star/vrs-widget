@@ -56,6 +56,7 @@ var VRS = (function () {
   var app = null;
   var db = null;
   var configured = false;
+  var authPromise = null;
 
   function isPlaceholder(v) {
     return typeof v !== "string" || v.indexOf("PASTE_YOUR") !== -1 || v.trim() === "";
@@ -83,12 +84,64 @@ var VRS = (function () {
       app = firebase.initializeApp(VRS_FIREBASE_CONFIG);
       db = firebase.database();
       configured = true;
+      // Sign in anonymously so the database security rules have an identity to
+      // check. This needs no user interaction — the browser silently receives a
+      // uid. Rules reject every read/write from unauthenticated clients, which
+      // blocks scripted access to the database from outside the app.
+      authPromise = signInAnonymously();
+      // Mark the rejection as handled here so a sign-in failure doesn't surface
+      // as an "uncaught (in promise)" error. ready() still sees and reports it.
+      authPromise.catch(function () {});
       return true;
     } catch (err) {
       console.error("VRS: Firebase init failed", err);
       configured = false;
       return false;
     }
+  }
+
+  function signInAnonymously() {
+    return new Promise(function (resolve, reject) {
+      try {
+        if (typeof firebase.auth !== "function") {
+          reject(new Error("Firebase Auth SDK not loaded"));
+          return;
+        }
+        var auth = firebase.auth();
+        if (auth.currentUser) {
+          resolve(auth.currentUser.uid);
+          return;
+        }
+        auth.onAuthStateChanged(function (user) {
+          if (user) resolve(user.uid);
+        });
+        auth.signInAnonymously().catch(reject);
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
+  // Resolves once anonymous sign-in has completed. Every code path that touches
+  // the database waits on this first.
+  //
+  // A failed sign-in resolves rather than rejects on purpose: the database
+  // security rules are the real enforcement point, so the right behaviour is to
+  // let the request proceed and be rejected server-side. Hard-failing here would
+  // only take the app down without adding any protection.
+  function ready() {
+    if (!authPromise) {
+      return Promise.reject(new Error("VRS: init() has not run or Firebase is unconfigured"));
+    }
+    return authPromise.catch(function (err) {
+      console.error(
+        "VRS: anonymous sign-in failed. If the database rules require auth, " +
+        "requests will be denied until Anonymous Authentication is enabled in " +
+        "the Firebase console (Build > Authentication > Sign-in method).",
+        err
+      );
+      return null;
+    });
   }
 
   // Injects a friendly banner explaining Firebase isn't configured yet.
@@ -552,6 +605,7 @@ var VRS = (function () {
 
   return {
     init: init,
+    ready: ready,
     isFirebaseConfigured: isFirebaseConfigured,
     showSetupBanner: showSetupBanner,
     nowTs: nowTs,

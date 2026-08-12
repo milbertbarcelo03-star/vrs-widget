@@ -390,8 +390,15 @@
   </section>
 </div>
 
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"
+        integrity="sha384-v3Z/Xdw1sCeo6M/geW7sn1Lt9obIm7MhAk8laVV+rvYFmzuWDELOiygx7dVte2dX"
+        crossorigin="anonymous"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"
+        integrity="sha384-p62xBRve8PdqGDGASZtZMuHgPsyPcT5VsFwgmz2p4zaFdEtt5ZzNqxK+CLzQS7xP"
+        crossorigin="anonymous"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"
+        integrity="sha384-fuqdSwJXSvcAuKu5FbSJcHqHK474liv5ji8tuDnHz1rpfrnuXZPdM0oRaSK6c95L"
+        crossorigin="anonymous"></script>
 <script src="shared.js"></script>
 <script>
 (function () {
@@ -613,7 +620,9 @@ try {
     setPrecallStatus('Starting call…');
     var candidateId = VRS.generateRoomCode();
 
-    VRS.getRoom(candidateId).then(function (existing) {
+    VRS.ready().then(function () {
+      return VRS.getRoom(candidateId);
+    }).then(function (existing) {
       if (existing && existing.status !== 'ended' && !VRS.isStale(existing)) {
         candidateId = VRS.generateRoomCode();
       }
@@ -1021,11 +1030,20 @@ try {
 
     showScreen('precall');
 
-    if (roomId && firebaseReady) {
-      checkExistingRoomThenReveal();
-    } else if (!roomId && myRole !== 'deaf' && firebaseReady) {
-      setPrecallStatus('A room code or link is required to join as ' + roleLabel(myRole) + '.');
-    }
+    if (!firebaseReady) return;
+
+    // All database access waits for anonymous sign-in to finish — the security
+    // rules reject reads and writes from unauthenticated clients.
+    VRS.ready().then(function () {
+      if (roomId) {
+        checkExistingRoomThenReveal();
+      } else if (myRole !== 'deaf') {
+        setPrecallStatus('A room code or link is required to join as ' + roleLabel(myRole) + '.');
+      }
+    }).catch(function (err) {
+      console.error('VRS: secure sign-in failed', err);
+      setPrecallStatus('Could not connect securely. Please reload the page and try again.');
+    });
   }
 
   if (document.readyState === 'loading') {

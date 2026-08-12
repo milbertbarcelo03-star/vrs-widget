@@ -1,0 +1,79 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "_vrsProto_mariana47": {
+      "signalingRoot9x": {
+
+        "queue": {
+          ".read": "auth != null",
+
+          "$roomId": {
+            ".write": "auth != null",
+            ".validate": "$roomId.matches(/^[0-9]{4}$/) && (!newData.exists() || newData.hasChildren(['roomId', 'createdAt']))",
+
+            "roomId":     { ".validate": "newData.isString() && newData.val().length <= 8" },
+            "createdAt":  { ".validate": "newData.isNumber()" },
+            "status":     { ".validate": "newData.isString() && newData.val().length <= 24" },
+            "callerRole": { ".validate": "newData.isString() && newData.val().length <= 24" },
+            "hasCamera":  { ".validate": "newData.isBoolean()" },
+            "$other":     { ".validate": false }
+          }
+        },
+
+        "rooms": {
+          "$roomId": {
+            ".read": "auth != null",
+            ".write": "auth != null",
+            ".validate": "$roomId.matches(/^[0-9]{4}$/)",
+
+            "createdAt":     { ".validate": "newData.isNumber() && (!data.exists() || data.val() === newData.val())" },
+            "updatedAt":     { ".validate": "newData.isNumber()" },
+            "endedAt":       { ".validate": "newData.isNumber()" },
+            "status":        { ".validate": "newData.isString() && newData.val().length <= 24" },
+            "deafId":        { ".validate": "newData.isString() && newData.val().length <= 64" },
+            "interpreterId": { ".validate": "newData.isString() && newData.val().length <= 64" },
+            "thirdId":       { ".validate": "newData.isString() && newData.val().length <= 64" },
+            "hasCamera":     { ".validate": "newData.isBoolean()" },
+
+            "participants": {
+              "$peerId": {
+                ".validate": "$peerId.length <= 64",
+                "peerId":   { ".validate": "newData.isString() && newData.val().length <= 64" },
+                "role":     { ".validate": "newData.isString() && newData.val().length <= 24" },
+                "joinedAt": { ".validate": "newData.isNumber()" },
+                "$other":   { ".validate": false }
+              }
+            },
+
+            "signals": {
+              "$pairKey": {
+                ".validate": "$pairKey.length <= 200",
+                "offer":      { ".validate": "newData.hasChildren(['type', 'payload'])" },
+                "answer":     { ".validate": "newData.hasChildren(['type', 'payload'])" },
+                "candidates": {
+                  "$candidateId": { ".validate": "newData.hasChildren(['type', 'payload'])" }
+                },
+                "$other":     { ".validate": false }
+              }
+            },
+
+            "chat": {
+              "$messageId": {
+                ".validate": "newData.hasChildren(['senderId', 'text', 'ts'])",
+                "senderId": { ".validate": "newData.isString() && newData.val().length <= 64" },
+                "role":     { ".validate": "newData.isString() && newData.val().length <= 24" },
+                "text":     { ".validate": "newData.isString() && newData.val().length <= 2000" },
+                "ts":       { ".validate": "newData.isNumber()" },
+                "$other":   { ".validate": false }
+              }
+            },
+
+            "$other": { ".validate": false }
+          }
+        }
+      }
+    }
+  }
+}
