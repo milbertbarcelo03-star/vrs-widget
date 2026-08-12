@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<!-- Clean entry point: /call/ starts a call directly, for people who want to
+     reach an interpreter without going through a host page's widget button. -->
+<meta http-equiv="refresh" content="0; url=../call.html?role=deaf">
+<title>Call an Interpreter</title>
+<style>
+  html,body{margin:0;min-height:-webkit-fill-available;background:#0a1220;color:#f2f5fa;
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;
+    display:flex;align-items:center;justify-content:center;overflow-x:hidden;}
+  a{color:#e08a4f;}
+  .box{text-align:center;padding:24px;}
+</style>
+</head>
+<body>
+<div class="box">
+  <p>Opening the call screen&hellip;</p>
+  <p><a href="../call.html?role=deaf">Continue</a></p>
+</div>
+<script>
+  try { window.location.replace('../call.html?role=deaf'); } catch (err) {
+    console.error('VRS: redirect failed', err);
+  }
+</script>
+</body>
+</html>

@@ -24,6 +24,16 @@ Prepared by: Milbert Barcelo — milbert.barcelo@marianas.edu
 
 ---
 
+## Direct links (no embedding required)
+
+| Who | Link |
+|---|---|
+| Deaf or hard-of-hearing caller | `https://milbertbarcelo03-star.github.io/vrs-widget/call/` |
+| Interpreter on duty | `https://milbertbarcelo03-star.github.io/vrs-widget/interpreter/` |
+
+These work on their own, so the service can be used before the widget is
+embedded anywhere. The embed options below add the floating button to a page.
+
 ## Option A — Quickest: embed from our hosted copy (no files to upload)
 
 Add this single line to any page, just before the closing `</body>` tag:
@@ -69,8 +79,14 @@ darker edge (use a darker shade of the same color).
 
 Calls ring to whoever has the **interpreter dashboard** open:
 
-- Hosted copy: `https://milbertbarcelo03-star.github.io/vrs-widget/interpreter.html`
-- Self-hosted: `https://YOUR-SITE/vrs-widget/interpreter.html`
+- Hosted copy: `https://milbertbarcelo03-star.github.io/vrs-widget/interpreter/`
+- Self-hosted: `https://YOUR-SITE/vrs-widget/interpreter/`
+
+The dashboard alerts the interpreter even when the tab is in the background:
+the browser tab title flashes, a tone repeats, and a desktop notification
+appears (allow notifications when the browser asks). The interpreter can work
+in other windows and still catch incoming calls — but **the tab must stay
+open**, since the alert comes from the page itself.
 
 The dashboard is protected by an access phrase, since whoever opens it receives
 live calls from deaf callers. The interpreter enters the phrase once per browser

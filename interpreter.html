@@ -373,6 +373,7 @@ try {
       : 'Toggle the switch above to go online and start receiving calls.';
 
     if (isOnline) {
+      prepareAlerts();
       // Wait for anonymous sign-in before touching the database — the security
       // rules reject reads from unauthenticated clients.
       VRS.ready().then(startListeningToQueue).catch(function (err) {
@@ -382,6 +383,7 @@ try {
       });
     } else {
       stopListeningToQueue();
+      stopAlerting();
     }
   }
 
@@ -418,6 +420,93 @@ try {
     });
   }
 
+  // ---- Incoming-call alerting ----
+  // Lets the interpreter leave this tab in the background instead of watching
+  // it. The interpreter is hearing, so an audible tone is appropriate here —
+  // the deaf-facing side of the app stays visual-only.
+  var alertAudioCtx = null;
+  var alertTitleTimer = null;
+  var alertToneTimer = null;
+  var alertNotification = null;
+  var alertBaseTitle = document.title;
+
+  function prepareAlerts() {
+    // Called from the Online toggle. That click is a user gesture, which is
+    // what browsers require before audio can start or permission can be asked.
+    try {
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!alertAudioCtx && Ctx) alertAudioCtx = new Ctx();
+      if (alertAudioCtx && alertAudioCtx.state === 'suspended') alertAudioCtx.resume();
+    } catch (err) {
+      console.error('VRS: could not prepare alert audio', err);
+    }
+    try {
+      if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+    } catch (err) {
+      console.error('VRS: could not request notification permission', err);
+    }
+  }
+
+  function playAlertTone() {
+    if (!alertAudioCtx) return;
+    try {
+      var osc = alertAudioCtx.createOscillator();
+      var gain = alertAudioCtx.createGain();
+      var t = alertAudioCtx.currentTime;
+      osc.type = 'sine';
+      osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.25, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+      osc.connect(gain);
+      gain.connect(alertAudioCtx.destination);
+      osc.start(t);
+      osc.stop(t + 0.5);
+    } catch (err) {
+      console.error('VRS: alert tone failed', err);
+    }
+  }
+
+  function startAlerting(roomLabel) {
+    stopAlerting();
+    var flashOn = false;
+    alertTitleTimer = setInterval(function () {
+      flashOn = !flashOn;
+      document.title = flashOn ? '📞 INCOMING CALL' : alertBaseTitle;
+    }, 700);
+
+    playAlertTone();
+    alertToneTimer = setInterval(playAlertTone, 2500);
+
+    try {
+      if ('Notification' in window && Notification.permission === 'granted') {
+        alertNotification = new Notification('Incoming VRS call', {
+          body: 'Room ' + roomLabel + ' — a deaf caller needs an interpreter.',
+          tag: 'vrs-incoming',
+          requireInteraction: true
+        });
+        alertNotification.onclick = function () {
+          try { window.focus(); } catch (err) { /* ignore */ }
+          try { alertNotification.close(); } catch (err) { /* ignore */ }
+        };
+      }
+    } catch (err) {
+      console.error('VRS: desktop notification failed', err);
+    }
+  }
+
+  function stopAlerting() {
+    if (alertTitleTimer) { clearInterval(alertTitleTimer); alertTitleTimer = null; }
+    if (alertToneTimer) { clearInterval(alertToneTimer); alertToneTimer = null; }
+    document.title = alertBaseTitle;
+    if (alertNotification) {
+      try { alertNotification.close(); } catch (err) { /* ignore */ }
+      alertNotification = null;
+    }
+  }
+
   function maybeShowIncomingCall() {
     if (!isOnline || activeIncomingRoomId || roomId) return; // already ringing or on a call
     var waiting = currentQueueSnapshot.find(function (q) { return q.status === 'waiting'; });
@@ -430,11 +519,13 @@ try {
     activeIncomingRoomId = queueEntry.roomId;
     incomingCallInfo.textContent = 'Room ' + queueEntry.roomId + (queueEntry.hasCamera === false ? ' — caller has no camera' : '');
     incomingCallOverlay.classList.add('vrs-visible', 'vrs-flash');
+    startAlerting(queueEntry.roomId);
   }
 
   function hideIncomingCall() {
     incomingCallOverlay.classList.remove('vrs-visible', 'vrs-flash');
     activeIncomingRoomId = null;
+    stopAlerting();
   }
 
   function onDeclineCall() {
