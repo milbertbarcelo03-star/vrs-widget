@@ -6,18 +6,20 @@
 <title>VRS Interpreter Call</title>
 <style>
   :root{
-    --vrs-purple:#7c3aed;
-    --vrs-purple-dark:#5b21b6;
-    --vrs-purple-light:#a78bfa;
-    --vrs-bg:#0b0b12;
-    --vrs-panel:#17141f;
-    --vrs-panel-2:#201c2c;
-    --vrs-text:#f4f2fa;
-    --vrs-muted:#a99fc9;
+    /* Career Tech theme: rust accent on dark navy (variable names kept from
+       the original purple theme — only the values changed). */
+    --vrs-purple:#b25d22;
+    --vrs-purple-dark:#96491a;
+    --vrs-purple-light:#e08a4f;
+    --vrs-bg:#0a1220;
+    --vrs-panel:#12203a;
+    --vrs-panel-2:#1a2c4d;
+    --vrs-text:#f2f5fa;
+    --vrs-muted:#9fb2d4;
     --vrs-danger:#e0405a;
     --vrs-success:#22c55e;
     --vrs-warning:#f4b740;
-    --vrs-border:#332b47;
+    --vrs-border:#24365a;
   }
 
   *{ box-sizing:border-box; }
@@ -94,7 +96,7 @@
   }
   .vrs-btn:active{ transform:scale(0.98); }
   .vrs-btn:disabled{ opacity:.5;cursor:not-allowed; }
-  .vrs-btn-primary{ background:linear-gradient(135deg,var(--vrs-purple),var(--vrs-purple-dark));color:#fff;box-shadow:0 6px 18px rgba(124,58,237,0.45); }
+  .vrs-btn-primary{ background:linear-gradient(135deg,var(--vrs-purple),var(--vrs-purple-dark));color:#fff;box-shadow:0 6px 18px rgba(178,93,34,0.45); }
   .vrs-btn-secondary{ background:var(--vrs-panel-2);color:var(--vrs-text);border:1px solid var(--vrs-border); }
   .vrs-btn-danger{ background:var(--vrs-danger);color:#fff; }
   .vrs-btn-block{ width:100%;max-width:420px;display:block;margin:0 auto; }
@@ -130,7 +132,7 @@
     width:96px;height:96px;border-radius:50%;
     background:linear-gradient(135deg,var(--vrs-purple),var(--vrs-purple-dark));
     display:flex;align-items:center;justify-content:center;font-size:40px;
-    box-shadow:0 0 0 0 rgba(124,58,237,0.6);
+    box-shadow:0 0 0 0 rgba(178,93,34,0.6);
     animation:vrsPulseCore 1.4s ease-in-out infinite;
   }
   .vrs-ring-pulse-wrap .vrs-ring-wave{
@@ -139,8 +141,8 @@
   }
   .vrs-ring-pulse-wrap .vrs-ring-wave.vrs-wave-2{ animation-delay:.5s; }
   @keyframes vrsPulseCore{
-    0%,100%{ box-shadow:0 0 0 0 rgba(124,58,237,0.55); }
-    50%{ box-shadow:0 0 0 18px rgba(124,58,237,0); }
+    0%,100%{ box-shadow:0 0 0 0 rgba(178,93,34,0.55); }
+    50%{ box-shadow:0 0 0 18px rgba(178,93,34,0); }
   }
   @keyframes vrsPulseWave{
     0%{ transform:scale(0.6);opacity:1; }

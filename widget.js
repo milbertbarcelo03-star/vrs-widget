@@ -78,7 +78,7 @@
         "#vrs-widget-btn .vrs-label{display:none;}" +
         "}" +
         "#vrs-widget-overlay{" +
-        "position:fixed;inset:0;z-index:2147483647;background:#0b0b12;" +
+        "position:fixed;inset:0;z-index:2147483647;background:#0a1220;" +
         "display:none;" +
         "}" +
         "#vrs-widget-overlay.vrs-open{display:block;}" +
