@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Career Tech High — VRS Widget Demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ct-rust:#b25d22;
+    --ct-rust-dark:#96491a;
+    --ct-navy:#14315f;
+    --ct-navy-dark:#0e2447;
+    --ct-peach:#ffede4;
+    --ct-text:#333333;
+    --ct-muted:#6b6560;
+    --ct-white:#ffffff;
+  }
+  *{ box-sizing:border-box; }
+  html, body{
+    margin:0;
+    min-height:-webkit-fill-available;
+    background:var(--ct-white);
+    color:var(--ct-text);
+    font-family:'Outfit',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;
+    font-size:17px;
+    overflow-x:hidden;
+  }
+
+  .demo-note{
+    background:var(--ct-navy-dark);color:#cfdcf3;font-size:13px;text-align:center;
+    padding:7px 16px;line-height:1.5;
+  }
+  .demo-note a{ color:#fff; }
+
+  header.site-header{
+    background:var(--ct-rust);
+    padding:14px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;
+    position:sticky;top:0;z-index:10;
+  }
+  .site-brand{
+    display:flex;align-items:center;gap:12px;font-weight:600;font-size:20px;color:#fff;letter-spacing:.3px;
+  }
+  .site-brand .site-logo{
+    width:40px;height:40px;border-radius:50%;background:#fff;color:var(--ct-rust);
+    display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;
+  }
+  nav.site-nav{ display:flex;align-items:center;flex-wrap:wrap;gap:4px; }
+  nav.site-nav a{
+    color:#ffe9db;text-decoration:none;font-size:15px;font-weight:500;padding:6px 11px;border-radius:5px;
+  }
+  nav.site-nav a:hover{ background:rgba(255,255,255,.14);color:#fff; }
+  nav.site-nav a.nav-apply{
+    background:var(--ct-navy);color:#fff;padding:9px 22px;margin-left:8px;font-weight:500;
+  }
+  nav.site-nav a.nav-apply:hover{ background:var(--ct-navy-dark); }
+
+  .hero{
+    background:
+      linear-gradient(rgba(14,36,71,.78), rgba(14,36,71,.78)),
+      linear-gradient(135deg,#2a4a7d,#14315f 55%,#0e2447);
+    color:#fff;text-align:center;
+    padding:84px 24px 92px;
+  }
+  .hero h1{ font-size:34px;font-weight:500;margin:0 auto 16px;max-width:760px;line-height:1.25; }
+  .hero p{
+    max-width:640px;margin:0 auto 28px;font-size:17px;line-height:1.65;color:#dbe4f2;font-weight:300;
+  }
+  .btn{
+    display:inline-block;background:var(--ct-navy);color:#fff;text-decoration:none;
+    padding:10px 30px;border-radius:5px;font-size:16px;font-weight:400;border:1px solid rgba(255,255,255,.25);
+  }
+  .btn:hover{ background:var(--ct-navy-dark); }
+  .btn.btn-rust{ background:var(--ct-rust);border-color:transparent; }
+  .btn.btn-rust:hover{ background:var(--ct-rust-dark); }
+
+  section{ padding:64px 24px; }
+  .container{ max-width:1000px;margin:0 auto; }
+  h2.section-title{ font-size:28px;font-weight:500;margin:0 0 18px;color:var(--ct-navy); }
+
+  .mission{ background:var(--ct-peach); }
+  .mission p{ line-height:1.7;margin:0 0 14px;max-width:820px; }
+  .mission ul{ line-height:1.8;margin:0 0 18px;padding-left:22px; }
+
+  .glance{ background:var(--ct-rust);color:#fff;text-align:center; }
+  .glance h2{ color:#fff;font-size:28px;font-weight:500;margin:0 0 34px; }
+  .glance-grid{ display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:26px;max-width:900px;margin:0 auto; }
+  .glance-num{ font-size:44px;font-weight:700;line-height:1; }
+  .glance-label{ margin-top:8px;font-size:15px;color:#ffe3d2;font-weight:300; }
+
+  .access{ background:var(--ct-white); }
+  .access-inner{
+    background:var(--ct-peach);border-radius:14px;padding:30px;display:flex;gap:20px;align-items:center;flex-wrap:wrap;
+    max-width:1000px;margin:0 auto;
+  }
+  .access-inner .emoji{ font-size:40px; }
+  .access-inner .copy{ flex:1 1 280px; }
+  .access-inner h3{ margin:0 0 6px;font-size:20px;font-weight:600;color:var(--ct-navy); }
+  .access-inner p{ margin:0;font-size:15px;line-height:1.6;color:var(--ct-muted); }
+
+  footer{
+    background:var(--ct-navy);color:#cfdcf3;font-size:14px;padding:40px 24px 30px;
+  }
+  .footer-grid{ max-width:1000px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:26px; }
+  footer h4{ color:#fff;font-size:15px;font-weight:600;margin:0 0 10px;letter-spacing:.4px; }
+  footer p{ margin:0 0 6px;line-height:1.6; }
+  .footer-disclaimer{
+    max-width:1000px;margin:28px auto 0;padding-top:18px;border-top:1px solid rgba(255,255,255,.18);
+    font-size:12.5px;line-height:1.6;color:#9fb2d4;
+  }
+  .footer-disclaimer a{ color:#cfdcf3; }
+</style>
+</head>
+<body>
+
+<div class="demo-note">
+  DEMO PREVIEW — VRS widget integration mock-up prepared for Career Tech High Academy.
+  This is not the official school website: visit <a href="https://careertechguam.org">careertechguam.org</a>.
+</div>
+
+<header class="site-header">
+  <div class="site-brand">
+    <span class="site-logo" aria-hidden="true">CT</span>
+    Career Tech High School
+  </div>
+  <nav class="site-nav">
+    <a href="#mission">About</a>
+    <a href="#glance">Admissions</a>
+    <a href="#access">Accessibility</a>
+    <a href="#contact">Contact</a>
+    <a href="#glance" class="nav-apply">Apply Now</a>
+  </nav>
+</header>
+
+<div class="hero">
+  <h1>Welcome to Career Tech High Academy Charter School!</h1>
+  <p>Guam's career technical high school — earn college credits and industry certifications while
+     staying rooted in our island's cultural heritage. Now enrolling for the 2026&ndash;2027 school year.</p>
+  <a class="btn btn-rust" href="#access">Our Accessibility Services</a>
+</div>
+
+<section class="mission" id="mission">
+  <div class="container">
+    <h2 class="section-title">Our Mission</h2>
+    <p>Career Tech High Academy is a public charter high school in H&aring;gat Bay, Guam, dedicated to:</p>
+    <ul>
+      <li>Building a community-centered identity grounded in our island's heritage,</li>
+      <li>Developing a skilled workforce ready for the careers of tomorrow, and</li>
+      <li>Serving as a forum where young leaders grow and give back.</li>
+    </ul>
+    <a class="btn" href="https://careertechguam.org">Learn More About Us</a>
+  </div>
+</section>
+
+<section class="glance" id="glance">
+  <h2>At A Glance</h2>
+  <div class="glance-grid">
+    <div><div class="glance-num">2019</div><div class="glance-label">School Established</div></div>
+    <div><div class="glance-num">93%</div><div class="glance-label">Graduation Rate</div></div>
+    <div><div class="glance-num">200+</div><div class="glance-label">Students Enrolled</div></div>
+    <div><div class="glance-num">30+</div><div class="glance-label">Virtual Classes Offered</div></div>
+  </div>
+</section>
+
+<section class="access" id="access">
+  <div class="access-inner">
+    <div class="emoji" aria-hidden="true">🤟</div>
+    <div class="copy">
+      <h3>Need a sign language interpreter?</h3>
+      <p>Deaf and hard-of-hearing students, families, and visitors can use the call button in the corner
+         of this page any time to connect with a live video sign language interpreter — and bring school
+         staff, a doctor's office, or emergency services into the same call. No appointment needed.</p>
+    </div>
+  </div>
+</section>
+
+<footer id="contact">
+  <div class="footer-grid">
+    <div>
+      <h4>CAREER TECH HIGH SCHOOL</h4>
+      <p>681 N Rt. 2 Agat, Guam 96915</p>
+      <p>P.O. Box 7428 Agat, Guam 96928</p>
+    </div>
+    <div>
+      <h4>CONTACT</h4>
+      <p>(671) 727-8324</p>
+      <p>(671) 979-8324</p>
+    </div>
+    <div>
+      <h4>ACCESSIBILITY</h4>
+      <p>Video Relay Service (VRS) widget — click the call button in the corner of this page to reach a
+         sign language interpreter.</p>
+    </div>
+  </div>
+  <div class="footer-disclaimer">
+    This page is a demonstration mock-up showing the VRS embeddable widget integrated into a
+    Career Tech High Academy&ndash;styled page. It is not the official school website
+    (<a href="https://careertechguam.org">careertechguam.org</a>). The "Call with a sign language
+    interpreter" button is added to this page with a single &lt;script&gt; tag from <code>widget.js</code>
+    — see INSTALL.md in the handoff package for embedding instructions.
+  </div>
+</footer>
+
+<!-- ============================================================
+     VRS Widget embed — this is the ONE script tag agencies add.
+     ============================================================ -->
+<script src="widget.js"></script>
+
+</body>
+</html>

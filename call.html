@@ -1,0 +1,1048 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>VRS Interpreter Call</title>
+<style>
+  :root{
+    --vrs-purple:#7c3aed;
+    --vrs-purple-dark:#5b21b6;
+    --vrs-purple-light:#a78bfa;
+    --vrs-bg:#0b0b12;
+    --vrs-panel:#17141f;
+    --vrs-panel-2:#201c2c;
+    --vrs-text:#f4f2fa;
+    --vrs-muted:#a99fc9;
+    --vrs-danger:#e0405a;
+    --vrs-success:#22c55e;
+    --vrs-warning:#f4b740;
+    --vrs-border:#332b47;
+  }
+
+  *{ box-sizing:border-box; }
+
+  html, body{
+    height:100%;
+    min-height:-webkit-fill-available;
+    margin:0;
+    background:var(--vrs-bg);
+    color:var(--vrs-text);
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;
+    overflow-x:hidden;
+  }
+
+  #app{
+    position:relative;
+    width:100%;
+    height:100vh;
+    height:100dvh;
+    min-height:-webkit-fill-available;
+    display:flex;
+    flex-direction:column;
+    overflow-y:auto;
+  }
+
+  .vrs-screen{
+    flex:1 1 auto;
+    display:flex;
+    flex-direction:column;
+    min-height:0;
+    padding:20px;
+    padding-bottom:max(20px, env(safe-area-inset-bottom));
+  }
+
+  .vrs-brand{
+    display:flex;align-items:center;gap:8px;
+    font-weight:700;font-size:14px;color:var(--vrs-purple-light);
+    letter-spacing:.03em;text-transform:uppercase;margin-bottom:14px;
+  }
+  .vrs-brand .vrs-dot-brand{ width:8px;height:8px;border-radius:50%;background:var(--vrs-purple); }
+
+  h1.vrs-title{ font-size:22px;margin:0 0 6px; }
+  p.vrs-subtitle{ margin:0 0 18px;color:var(--vrs-muted);font-size:15px;line-height:1.5; }
+
+  .vrs-camera-wrap{
+    position:relative;
+    width:100%;
+    max-width:420px;
+    aspect-ratio:4/3;
+    min-height:220px;
+    background:var(--vrs-panel);
+    border:2px solid var(--vrs-border);
+    border-radius:16px;
+    overflow:hidden;
+    margin:0 auto 18px;
+  }
+  .vrs-camera-wrap video{
+    width:100%;height:100%;object-fit:cover;display:block;background:#000;
+  }
+  .vrs-camera-placeholder{
+    position:absolute;inset:0;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:10px;color:var(--vrs-muted);font-size:15px;text-align:center;padding:16px;
+  }
+  .vrs-camera-placeholder .vrs-emoji{ font-size:40px; }
+  .vrs-camera-wrap.vrs-has-stream .vrs-camera-placeholder{ display:none; }
+
+  .vrs-btn{
+    appearance:none;border:none;border-radius:12px;
+    padding:14px 22px;font-size:16px;font-weight:700;cursor:pointer;
+    font-family:inherit;
+    transition:transform .12s ease, opacity .12s ease;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .vrs-btn:active{ transform:scale(0.98); }
+  .vrs-btn:disabled{ opacity:.5;cursor:not-allowed; }
+  .vrs-btn-primary{ background:linear-gradient(135deg,var(--vrs-purple),var(--vrs-purple-dark));color:#fff;box-shadow:0 6px 18px rgba(124,58,237,0.45); }
+  .vrs-btn-secondary{ background:var(--vrs-panel-2);color:var(--vrs-text);border:1px solid var(--vrs-border); }
+  .vrs-btn-danger{ background:var(--vrs-danger);color:#fff; }
+  .vrs-btn-block{ width:100%;max-width:420px;display:block;margin:0 auto; }
+
+  .vrs-stack{ display:flex;flex-direction:column;gap:12px;width:100%;max-width:420px;margin:0 auto; }
+
+  .vrs-error-box{
+    background:#3a1420;border:1px solid var(--vrs-danger);color:#ffd7de;
+    border-radius:12px;padding:14px;margin:0 auto 14px;max-width:420px;font-size:14px;line-height:1.5;
+  }
+
+  .vrs-manual-join{
+    margin:22px auto 0;max-width:420px;width:100%;
+    border-top:1px solid var(--vrs-border);padding-top:16px;
+  }
+  .vrs-manual-join label{ font-size:13px;color:var(--vrs-muted);display:block;margin-bottom:6px; }
+  .vrs-manual-join-row{ display:flex;gap:8px; }
+  .vrs-code-input{
+    flex:1;min-width:0;
+    background:var(--vrs-panel);border:1px solid var(--vrs-border);color:var(--vrs-text);
+    border-radius:10px;padding:12px;font-size:20px;letter-spacing:.3em;text-align:center;
+  }
+
+  .vrs-status-text{ text-align:center;color:var(--vrs-muted);font-size:14px;margin-top:10px;max-width:420px;margin-left:auto;margin-right:auto; }
+
+  /* ---- Ringing screen ---- */
+  #screen-ringing{ align-items:center;justify-content:center;text-align:center; }
+  .vrs-ring-pulse-wrap{
+    position:relative;width:180px;height:180px;min-height:180px;
+    display:flex;align-items:center;justify-content:center;margin-bottom:24px;
+  }
+  .vrs-ring-pulse-wrap .vrs-ring-core{
+    width:96px;height:96px;border-radius:50%;
+    background:linear-gradient(135deg,var(--vrs-purple),var(--vrs-purple-dark));
+    display:flex;align-items:center;justify-content:center;font-size:40px;
+    box-shadow:0 0 0 0 rgba(124,58,237,0.6);
+    animation:vrsPulseCore 1.4s ease-in-out infinite;
+  }
+  .vrs-ring-pulse-wrap .vrs-ring-wave{
+    position:absolute;inset:0;border-radius:50%;border:3px solid var(--vrs-purple);
+    animation:vrsPulseWave 1.6s ease-out infinite;
+  }
+  .vrs-ring-pulse-wrap .vrs-ring-wave.vrs-wave-2{ animation-delay:.5s; }
+  @keyframes vrsPulseCore{
+    0%,100%{ box-shadow:0 0 0 0 rgba(124,58,237,0.55); }
+    50%{ box-shadow:0 0 0 18px rgba(124,58,237,0); }
+  }
+  @keyframes vrsPulseWave{
+    0%{ transform:scale(0.6);opacity:1; }
+    100%{ transform:scale(1.6);opacity:0; }
+  }
+  #ringTimer{ font-variant-numeric:tabular-nums;color:var(--vrs-purple-light); }
+
+  /* ---- Call screen ---- */
+  #screen-call{ padding:0;display:flex;flex-direction:column;height:100%; }
+  #connectionBanner{
+    flex:0 0 auto;padding:8px 16px;text-align:center;font-size:13px;font-weight:600;
+    background:var(--vrs-panel-2);color:var(--vrs-muted);border-bottom:1px solid var(--vrs-border);
+  }
+  #connectionBanner.vrs-banner-warning{ background:#4a3a12;color:var(--vrs-warning); }
+  #connectionBanner.vrs-banner-danger{ background:#3a1420;color:#ffb3c0;animation:vrsFlashBanner 1s ease-in-out infinite; }
+  #connectionBanner.vrs-banner-success{ background:#123a24;color:#7cf0ad; }
+  @keyframes vrsFlashBanner{ 0%,100%{ opacity:1; } 50%{ opacity:.55; } }
+
+  #videoGrid{
+    flex:1 1 auto;min-height:200px;display:grid;gap:8px;padding:10px;
+    grid-template-columns:1fr;
+  }
+  #videoGrid[data-count="2"]{ grid-template-columns:1fr 1fr; }
+  #videoGrid[data-count="3"]{ grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; }
+  #videoGrid[data-count="3"] .vrs-tile:first-child{ grid-column:1 / span 2; }
+  #videoGrid[data-count="0"]{ grid-template-columns:1fr; }
+
+  .vrs-tile{
+    position:relative;background:#000;border-radius:14px;overflow:hidden;
+    min-height:140px;border:1px solid var(--vrs-border);
+  }
+  .vrs-tile video{ width:100%;height:100%;object-fit:cover;display:block; }
+  .vrs-tile-overlay{
+    position:absolute;left:8px;bottom:8px;display:flex;align-items:center;gap:6px;
+    background:rgba(0,0,0,0.55);padding:5px 10px;border-radius:999px;font-size:12px;font-weight:600;
+  }
+  .vrs-dot{ width:8px;height:8px;border-radius:50%;background:var(--vrs-muted); }
+  .vrs-dot-good{ background:var(--vrs-success); }
+  .vrs-dot-bad{ background:var(--vrs-danger); }
+  .vrs-dot-pending{ background:var(--vrs-warning); }
+  .vrs-tile-nomedia{
+    position:absolute;inset:0;min-height:140px;display:none;flex-direction:column;align-items:center;justify-content:center;
+    gap:8px;color:var(--vrs-muted);font-size:13px;background:#111018;
+  }
+  .vrs-tile.vrs-no-media .vrs-tile-nomedia{ display:flex; }
+  .vrs-tile.vrs-no-media video{ display:none; }
+
+  #chatPanel{
+    position:fixed;right:0;top:0;bottom:0;width:min(340px, 100%);
+    background:var(--vrs-panel);border-left:1px solid var(--vrs-border);
+    display:flex;flex-direction:column;transform:translateX(100%);
+    transition:transform .2s ease;z-index:50;
+  }
+  #chatPanel.vrs-open{ transform:translateX(0); }
+  .vrs-chat-header{
+    padding:14px 16px;border-bottom:1px solid var(--vrs-border);
+    display:flex;align-items:center;justify-content:space-between;font-weight:700;
+  }
+  #chatMessages{
+    flex:1 1 auto;overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:10px;
+    min-height:0;
+  }
+  .vrs-chat-msg{ max-width:88%;background:var(--vrs-panel-2);border-radius:12px;padding:8px 12px;font-size:14px; }
+  .vrs-chat-msg.vrs-mine{ align-self:flex-end;background:var(--vrs-purple-dark); }
+  .vrs-chat-msg .vrs-chat-role{ display:block;font-size:11px;color:var(--vrs-muted);margin-bottom:2px;font-weight:700;text-transform:uppercase;letter-spacing:.04em; }
+  .vrs-chat-input-row{ display:flex;gap:8px;padding:12px;border-top:1px solid var(--vrs-border); }
+  #chatInput{
+    flex:1;min-width:0;background:var(--vrs-panel-2);border:1px solid var(--vrs-border);color:var(--vrs-text);
+    border-radius:10px;padding:10px 12px;font-size:14px;
+  }
+
+  #controlBar{
+    flex:0 0 auto;display:flex;gap:10px;flex-wrap:wrap;justify-content:center;
+    padding:12px;border-top:1px solid var(--vrs-border);background:var(--vrs-panel);
+    padding-bottom:max(12px, env(safe-area-inset-bottom));
+  }
+  .vrs-ctrl-btn{
+    position:relative;
+    display:flex;flex-direction:column;align-items:center;gap:3px;
+    background:var(--vrs-panel-2);border:1px solid var(--vrs-border);color:var(--vrs-text);
+    border-radius:12px;padding:10px 14px;font-size:11px;font-weight:600;cursor:pointer;min-width:64px;
+  }
+  .vrs-ctrl-btn .vrs-ctrl-icon{ font-size:20px; }
+  .vrs-ctrl-btn.vrs-ctrl-off{ background:#3a1420;border-color:var(--vrs-danger); }
+  .vrs-ctrl-btn.vrs-ctrl-danger{ background:var(--vrs-danger);border-color:var(--vrs-danger); }
+  #chatUnreadBadge{
+    position:absolute;top:2px;right:2px;background:var(--vrs-danger);color:#fff;
+    border-radius:999px;font-size:10px;min-width:16px;height:16px;display:flex;align-items:center;justify-content:center;
+    padding:0 3px;
+  }
+  #chatUnreadBadge[hidden]{ display:none; }
+
+  /* ---- Third party (dial pad) screen ---- */
+  #screen-thirdparty{ align-items:center;text-align:center;justify-content:flex-start;overflow-y:auto; }
+  .vrs-code-display{ display:flex;gap:10px;justify-content:center;margin:18px 0; }
+  .vrs-code-digit{
+    width:52px;height:64px;border-radius:12px;background:var(--vrs-panel);border:2px solid var(--vrs-purple);
+    display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:800;color:var(--vrs-purple-light);
+  }
+  .vrs-link-row{ display:flex;gap:8px;max-width:420px;width:100%;margin:0 auto 6px; }
+  .vrs-link-row input{
+    flex:1;min-width:0;background:var(--vrs-panel);border:1px solid var(--vrs-border);color:var(--vrs-text);
+    border-radius:10px;padding:12px;font-size:13px;
+  }
+  #copyConfirmText{ color:var(--vrs-success);font-size:13px;font-weight:700;margin-bottom:14px;display:block; }
+  .vrs-dialpad-grid{
+    display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:280px;margin:18px auto;
+  }
+  .vrs-dialpad-key{
+    aspect-ratio:1;border-radius:50%;background:var(--vrs-panel-2);border:1px solid var(--vrs-border);
+    color:var(--vrs-text);font-size:20px;font-weight:700;display:flex;align-items:center;justify-content:center;
+  }
+  .vrs-dialpad-note{ color:var(--vrs-muted);font-size:13px;max-width:420px;margin:6px auto 20px; }
+
+  #screen-error{ align-items:center;justify-content:center;text-align:center; }
+
+  [hidden]{ display:none !important; }
+
+  @media (max-width:520px){
+    #chatPanel{ width:100%; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="vrs-banner-host"></div>
+
+  <section id="screen-precall" class="vrs-screen" hidden>
+    <div class="vrs-brand"><span class="vrs-dot-brand"></span> VRS Prototype</div>
+    <h1 class="vrs-title" id="precallTitle">Call a Sign Language Interpreter</h1>
+    <p class="vrs-subtitle" id="precallSubtitle">Turn on your camera and microphone, then start the call. You can continue without a camera if needed.</p>
+
+    <div class="vrs-camera-wrap" id="cameraPreviewWrap">
+      <video id="localPreviewVideo" autoplay playsinline muted></video>
+      <div class="vrs-camera-placeholder">
+        <span class="vrs-emoji" aria-hidden="true">📷</span>
+        <span>Camera preview will appear here</span>
+      </div>
+    </div>
+
+    <div class="vrs-error-box" id="cameraErrorBox" hidden>
+      <strong>Camera/microphone issue</strong>
+      <div id="cameraErrorText"></div>
+    </div>
+
+    <div class="vrs-stack">
+      <button type="button" class="vrs-btn vrs-btn-primary vrs-btn-block" id="btnEnableCamera">Enable Camera &amp; Microphone</button>
+      <button type="button" class="vrs-btn vrs-btn-primary vrs-btn-block" id="btnStartCall" hidden>Call Interpreter Now</button>
+      <button type="button" class="vrs-btn vrs-btn-primary vrs-btn-block" id="btnJoinCall" hidden>Join Call</button>
+    </div>
+
+    <div class="vrs-status-text" id="precallStatus"></div>
+
+    <div class="vrs-manual-join" id="manualJoinBox">
+      <label for="manualCodeInput">Have a 4-digit room code from someone already on a call?</label>
+      <div class="vrs-manual-join-row">
+        <input
+          id="manualCodeInput"
+          class="vrs-code-input"
+          type="text"
+          inputmode="numeric"
+          pattern="[0-9]*"
+          maxlength="4"
+          placeholder="0000"
+          autocapitalize="none"
+          autocorrect="off"
+          spellcheck="false"
+          autocomplete="off">
+        <button type="button" class="vrs-btn vrs-btn-secondary" id="btnManualJoin">Join</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="screen-ringing" class="vrs-screen" hidden>
+    <div class="vrs-ring-pulse-wrap">
+      <div class="vrs-ring-wave"></div>
+      <div class="vrs-ring-wave vrs-wave-2"></div>
+      <div class="vrs-ring-core" aria-hidden="true">🤟</div>
+    </div>
+    <h2 class="vrs-title">Calling interpreter&hellip;</h2>
+    <p class="vrs-subtitle">Waiting for an available interpreter to accept. Elapsed: <span id="ringTimer">0:00</span></p>
+    <button type="button" class="vrs-btn vrs-btn-secondary" id="btnCancelRinging">Cancel</button>
+  </section>
+
+  <section id="screen-call" class="vrs-screen" hidden>
+    <div id="connectionBanner">Connecting&hellip;</div>
+    <div id="videoGrid" data-count="0"></div>
+    <div id="controlBar">
+      <button type="button" class="vrs-ctrl-btn" id="btnToggleMic"><span class="vrs-ctrl-icon">🎤</span>Mute</button>
+      <button type="button" class="vrs-ctrl-btn" id="btnToggleCam"><span class="vrs-ctrl-icon">📷</span>Camera</button>
+      <button type="button" class="vrs-ctrl-btn" id="btnToggleChat"><span class="vrs-ctrl-icon">💬</span>Chat<span id="chatUnreadBadge" hidden>0</span></button>
+      <button type="button" class="vrs-ctrl-btn" id="btnAddThird"><span class="vrs-ctrl-icon">➕</span>Add Party</button>
+      <button type="button" class="vrs-ctrl-btn vrs-ctrl-danger" id="btnEndCall"><span class="vrs-ctrl-icon">📞</span>End</button>
+    </div>
+
+    <div id="chatPanel">
+      <div class="vrs-chat-header">
+        <span>Chat</span>
+        <button type="button" class="vrs-btn vrs-btn-secondary" id="btnCloseChat" style="padding:6px 10px;">Close</button>
+      </div>
+      <div id="chatMessages"></div>
+      <div class="vrs-chat-input-row">
+        <input id="chatInput" type="text" placeholder="Type a message&hellip;" autocomplete="off">
+        <button type="button" class="vrs-btn vrs-btn-primary" id="btnSendChat">Send</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="screen-thirdparty" class="vrs-screen" hidden>
+    <div class="vrs-brand"><span class="vrs-dot-brand"></span> VRS Prototype</div>
+    <h2 class="vrs-title">Add a Third Party</h2>
+    <p class="vrs-subtitle">Share this code or link with the third party (e.g. police, fire, or a doctor's office) so they can join this call.</p>
+
+    <div class="vrs-code-display" id="thirdPartyCodeBoxes"></div>
+
+    <div class="vrs-link-row">
+      <input
+        id="thirdPartyLinkInput"
+        type="text"
+        readonly
+        autocapitalize="none"
+        autocorrect="off"
+        spellcheck="false"
+        autocomplete="off">
+      <button type="button" class="vrs-btn vrs-btn-primary" id="btnCopyLink">Copy Link</button>
+    </div>
+    <span id="copyConfirmText" hidden>Copied to clipboard!</span>
+
+    <div class="vrs-dialpad-grid" aria-hidden="true">
+      <div class="vrs-dialpad-key">1</div><div class="vrs-dialpad-key">2</div><div class="vrs-dialpad-key">3</div>
+      <div class="vrs-dialpad-key">4</div><div class="vrs-dialpad-key">5</div><div class="vrs-dialpad-key">6</div>
+      <div class="vrs-dialpad-key">7</div><div class="vrs-dialpad-key">8</div><div class="vrs-dialpad-key">9</div>
+      <div class="vrs-dialpad-key">*</div><div class="vrs-dialpad-key">0</div><div class="vrs-dialpad-key">#</div>
+    </div>
+    <p class="vrs-dialpad-note">This prototype doesn't dial real phone numbers. Use the code or link above to bring someone into the call.</p>
+
+    <button type="button" class="vrs-btn vrs-btn-secondary vrs-btn-block" id="btnCloseThirdParty">Done &mdash; Back to Call</button>
+  </section>
+
+  <section id="screen-error" class="vrs-screen" hidden>
+    <div class="vrs-brand"><span class="vrs-dot-brand"></span> VRS Prototype</div>
+    <h2 class="vrs-title">This call link isn't available</h2>
+    <p class="vrs-subtitle" id="errorMessageText">This call may have ended or the link may have expired.</p>
+    <button type="button" class="vrs-btn vrs-btn-primary" id="btnReload">Reload</button>
+  </section>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+<script src="shared.js"></script>
+<script>
+(function () {
+"use strict";
+try {
+
+  // ---- DOM references ----
+  var screens = {
+    precall: document.getElementById('screen-precall'),
+    ringing: document.getElementById('screen-ringing'),
+    call: document.getElementById('screen-call'),
+    thirdparty: document.getElementById('screen-thirdparty'),
+    error: document.getElementById('screen-error')
+  };
+  var activeScreenName = null;
+
+  var precallTitle = document.getElementById('precallTitle');
+  var precallSubtitle = document.getElementById('precallSubtitle');
+  var localPreviewVideo = document.getElementById('localPreviewVideo');
+  var cameraPreviewWrap = document.getElementById('cameraPreviewWrap');
+  var cameraErrorBox = document.getElementById('cameraErrorBox');
+  var cameraErrorText = document.getElementById('cameraErrorText');
+  var btnEnableCamera = document.getElementById('btnEnableCamera');
+  var btnStartCall = document.getElementById('btnStartCall');
+  var btnJoinCall = document.getElementById('btnJoinCall');
+  var precallStatus = document.getElementById('precallStatus');
+  var manualJoinBox = document.getElementById('manualJoinBox');
+  var manualCodeInput = document.getElementById('manualCodeInput');
+  var btnManualJoin = document.getElementById('btnManualJoin');
+
+  var ringTimerEl = document.getElementById('ringTimer');
+  var btnCancelRinging = document.getElementById('btnCancelRinging');
+
+  var connectionBanner = document.getElementById('connectionBanner');
+  var videoGrid = document.getElementById('videoGrid');
+  var btnToggleMic = document.getElementById('btnToggleMic');
+  var btnToggleCam = document.getElementById('btnToggleCam');
+  var btnToggleChat = document.getElementById('btnToggleChat');
+  var chatUnreadBadge = document.getElementById('chatUnreadBadge');
+  var btnAddThird = document.getElementById('btnAddThird');
+  var btnEndCall = document.getElementById('btnEndCall');
+  var chatPanel = document.getElementById('chatPanel');
+  var btnCloseChat = document.getElementById('btnCloseChat');
+  var chatMessages = document.getElementById('chatMessages');
+  var chatInput = document.getElementById('chatInput');
+  var btnSendChat = document.getElementById('btnSendChat');
+
+  var thirdPartyCodeBoxes = document.getElementById('thirdPartyCodeBoxes');
+  var thirdPartyLinkInput = document.getElementById('thirdPartyLinkInput');
+  var btnCopyLink = document.getElementById('btnCopyLink');
+  var copyConfirmText = document.getElementById('copyConfirmText');
+  var btnCloseThirdParty = document.getElementById('btnCloseThirdParty');
+
+  var errorMessageText = document.getElementById('errorMessageText');
+  var btnReload = document.getElementById('btnReload');
+
+  // ---- URL params & identity ----
+  var urlParams = new URLSearchParams(window.location.search);
+  var myRole = (urlParams.get('role') || 'deaf').toLowerCase();
+  if (['deaf', 'interpreter', 'third'].indexOf(myRole) === -1) myRole = 'deaf';
+  var joinRoomParam = (urlParams.get('room') || '').trim();
+
+  var myId = myRole + '_' + Math.random().toString(36).slice(2, 8) + '_' + Date.now().toString(36);
+
+  // ---- state ----
+  var roomId = joinRoomParam || null;
+  var localStream = null;
+  var mesh = null;
+  var remoteTiles = {};
+  var chatUnsub = null;
+  var roomUnsub = null;
+  var ringingStartTs = null;
+  var ringingTimerHandle = null;
+  var chatOpen = false;
+  var unreadCount = 0;
+  var micEnabled = true;
+  var camEnabled = true;
+  var ended = false;
+  var firebaseReady = false;
+
+  // ---- helpers ----
+  function roleLabel(role) {
+    if (role === 'deaf') return 'Deaf Caller';
+    if (role === 'interpreter') return 'Interpreter';
+    if (role === 'third') return 'Third Party';
+    return 'Participant';
+  }
+
+  function showScreen(name) {
+    activeScreenName = name;
+    Object.keys(screens).forEach(function (k) {
+      if (!screens[k]) return;
+      screens[k].hidden = (k !== name);
+    });
+  }
+
+  function setPrecallStatus(text) {
+    precallStatus.textContent = text || '';
+  }
+
+  function setErrorMessage(text) {
+    errorMessageText.textContent = text || 'This call may have ended or the link may have expired.';
+  }
+
+  function setConnectionBanner(text, kind) {
+    connectionBanner.textContent = text;
+    connectionBanner.className = kind ? ('vrs-banner-' + kind) : '';
+  }
+
+  // ---- Firebase init / setup banner ----
+  function initFirebase() {
+    firebaseReady = VRS.init();
+    if (!firebaseReady) {
+      VRS.showSetupBanner(document.getElementById('vrs-banner-host'));
+    }
+  }
+
+  function disableCallActionsIfUnconfigured() {
+    if (firebaseReady) return;
+    [btnStartCall, btnJoinCall, btnManualJoin].forEach(function (btn) {
+      if (!btn) return;
+      btn.disabled = true;
+      btn.title = 'Firebase is not configured yet — see the banner above.';
+    });
+  }
+
+  // ---- Role-specific precall setup ----
+  function applyRoleToUI() {
+    if (myRole === 'deaf') {
+      precallTitle.textContent = 'Call a Sign Language Interpreter';
+      precallSubtitle.textContent = 'Turn on your camera and microphone, then start the call. You can continue without a camera if needed.';
+    } else if (myRole === 'interpreter') {
+      precallTitle.textContent = 'Join as Interpreter';
+      precallSubtitle.textContent = 'Interpreters normally receive calls from interpreter.html, but you can join a specific room directly here.';
+    } else if (myRole === 'third') {
+      precallTitle.textContent = 'Join This Call';
+      precallSubtitle.textContent = "You've been invited to join a video call already in progress.";
+      manualJoinBox.hidden = true;
+    }
+
+    if (roomId) {
+      manualJoinBox.hidden = true;
+    }
+  }
+
+  function revealNextStepButtons() {
+    if (roomId) {
+      checkExistingRoomThenReveal();
+    } else if (myRole === 'deaf') {
+      btnStartCall.hidden = false;
+    } else {
+      setPrecallStatus('A room code or link is required to join as ' + roleLabel(myRole) + '.');
+    }
+  }
+
+  function checkExistingRoomThenReveal() {
+    setPrecallStatus('Checking room ' + roomId + '…');
+    VRS.getRoom(roomId).then(function (room) {
+      if (!room || room.status === 'ended' || VRS.isStale(room)) {
+        showScreen('error');
+        setErrorMessage('This call link has expired or the call has ended. Ask for a new link or code.');
+        return;
+      }
+      setPrecallStatus('');
+      btnJoinCall.hidden = false;
+    }).catch(function (err) {
+      console.error('VRS: room check failed', err);
+      setPrecallStatus('Could not verify this room. It may not exist yet.');
+    });
+  }
+
+  // ---- Camera ----
+  function onEnableCameraTap() {
+    cameraErrorBox.hidden = true;
+    btnEnableCamera.disabled = true;
+    btnEnableCamera.textContent = 'Requesting camera & mic…';
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      showCameraError({ name: 'NotSupportedError' });
+      revealNextStepButtons();
+      return;
+    }
+
+    navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+      .then(function (stream) {
+        localStream = stream;
+        localPreviewVideo.srcObject = stream;
+        cameraPreviewWrap.classList.add('vrs-has-stream');
+        localPreviewVideo.play().catch(function () {});
+        btnEnableCamera.hidden = true;
+        revealNextStepButtons();
+      })
+      .catch(function (err) {
+        console.error('VRS: getUserMedia failed', err);
+        showCameraError(err);
+        revealNextStepButtons();
+      });
+  }
+
+  function showCameraError(err) {
+    cameraErrorBox.hidden = false;
+    var msg = "We couldn't access your camera/microphone.";
+    if (err && err.name === 'NotAllowedError') {
+      msg = 'Camera/microphone permission was denied.';
+    } else if (err && err.name === 'NotFoundError') {
+      msg = 'No camera or microphone was found on this device.';
+    } else if (err && err.name === 'NotSupportedError') {
+      msg = 'This browser does not support camera access here.';
+    }
+    cameraErrorText.textContent = msg + ' You can still chat and continue without video, or tap retry.';
+    btnEnableCamera.hidden = false;
+    btnEnableCamera.disabled = false;
+    btnEnableCamera.textContent = 'Retry Camera & Microphone';
+  }
+
+  // ---- Deaf caller: start a new call ----
+  function onStartCallTap() {
+    btnStartCall.disabled = true;
+    setPrecallStatus('Starting call…');
+    var candidateId = VRS.generateRoomCode();
+
+    VRS.getRoom(candidateId).then(function (existing) {
+      if (existing && existing.status !== 'ended' && !VRS.isStale(existing)) {
+        candidateId = VRS.generateRoomCode();
+      }
+      roomId = candidateId;
+      return VRS.createRoom(roomId, {
+        status: 'ringing',
+        deafId: myId,
+        hasCamera: !!localStream
+      });
+    }).then(function () {
+      return VRS.pushToQueue(roomId, {
+        roomId: roomId,
+        callerRole: 'deaf',
+        status: 'waiting',
+        hasCamera: !!localStream
+      });
+    }).then(function () {
+      VRS.addParticipant(roomId, myId, { role: 'deaf' });
+      attachRoomListener();
+      enterRingingScreen();
+    }).catch(function (err) {
+      console.error('VRS: failed to start call', err);
+      setPrecallStatus('Could not start the call. Please try again.');
+      btnStartCall.disabled = false;
+    });
+  }
+
+  function enterRingingScreen() {
+    showScreen('ringing');
+    ringingStartTs = Date.now();
+    updateRingingTimer();
+    ringingTimerHandle = setInterval(updateRingingTimer, 1000);
+  }
+
+  function updateRingingTimer() {
+    var secs = Math.floor((Date.now() - ringingStartTs) / 1000);
+    var m = Math.floor(secs / 60);
+    var s = secs % 60;
+    ringTimerEl.textContent = m + ':' + (s < 10 ? '0' : '') + s;
+  }
+
+  function onCancelRingingTap() {
+    if (ringingTimerHandle) clearInterval(ringingTimerHandle);
+    if (roomId) {
+      VRS.endRoom(roomId);
+      VRS.removeFromQueue(roomId);
+      VRS.removeParticipant(roomId, myId);
+    }
+    if (roomUnsub) { roomUnsub(); roomUnsub = null; }
+    roomId = null;
+    showScreen('precall');
+    btnStartCall.hidden = false;
+    btnStartCall.disabled = false;
+    setPrecallStatus('Call cancelled.');
+  }
+
+  // ---- Joining an existing room (third party / interpreter-via-call.html) ----
+  function onJoinCallTap() {
+    btnJoinCall.disabled = true;
+    VRS.getRoom(roomId).then(function (room) {
+      if (!room || room.status === 'ended' || VRS.isStale(room)) {
+        showScreen('error');
+        setErrorMessage('This call link has expired or the call has ended.');
+        return;
+      }
+      var patch = {};
+      if (myRole === 'third') patch.thirdId = myId;
+      if (myRole === 'interpreter') {
+        patch.interpreterId = myId;
+        patch.status = 'active';
+      }
+      if (Object.keys(patch).length) VRS.updateRoom(roomId, patch);
+      VRS.addParticipant(roomId, myId, { role: myRole });
+      attachRoomListener();
+      enterCallScreen();
+    }).catch(function (err) {
+      console.error('VRS: join failed', err);
+      btnJoinCall.disabled = false;
+      setPrecallStatus('Could not join this room. Please try again.');
+    });
+  }
+
+  function onManualJoinTap() {
+    var code = (manualCodeInput.value || '').trim();
+    if (!/^\d{4}$/.test(code)) {
+      setPrecallStatus('Enter the 4-digit code exactly as shared with you.');
+      return;
+    }
+    var url = new URL(window.location.href);
+    url.searchParams.set('room', code);
+    url.searchParams.set('role', 'third');
+    window.location.href = url.toString();
+  }
+
+  // ---- Room listener (shared across ringing + call phases) ----
+  function attachRoomListener() {
+    if (roomUnsub) return;
+    roomUnsub = VRS.listenRoom(roomId, function (room) {
+      if (!room) return;
+      if (room.status === 'active' && activeScreenName === 'ringing') {
+        if (ringingTimerHandle) clearInterval(ringingTimerHandle);
+        enterCallScreen();
+      } else if (room.status === 'ended' && !ended && activeScreenName !== 'precall') {
+        setConnectionBanner('The call has ended.', 'danger');
+        setTimeout(function () { endCall(false); }, 1200);
+      }
+    });
+  }
+
+  // ---- Call screen ----
+  function enterCallScreen() {
+    showScreen('call');
+    ensureLocalTile();
+    setConnectionBanner('Connected — waiting for other participants…', 'info');
+
+    mesh = VRS.createMesh({
+      roomId: roomId,
+      myId: myId,
+      localStream: localStream,
+      onRemoteStream: handleRemoteStream,
+      onRemoteRemoved: handleRemoteRemoved,
+      onParticipantsChange: handleParticipantsChange,
+      onPeerState: handlePeerState
+    });
+    mesh.start();
+
+    chatUnsub = VRS.listenChat(roomId, handleChatMessage);
+  }
+
+  function createTileElement(key, label) {
+    var tile = document.createElement('div');
+    tile.className = 'vrs-tile';
+    tile.dataset.peer = key;
+    tile.innerHTML =
+      '<video autoplay playsinline' + (key === 'local' ? ' muted' : '') + '></video>' +
+      '<div class="vrs-tile-overlay"><span class="vrs-dot vrs-dot-pending"></span><span class="vrs-tile-label"></span></div>' +
+      '<div class="vrs-tile-nomedia"><span aria-hidden="true">🎤</span><span>Camera off</span></div>';
+    tile.querySelector('.vrs-tile-label').textContent = label;
+    return tile;
+  }
+
+  function updateGridLayout() {
+    videoGrid.setAttribute('data-count', String(videoGrid.children.length));
+  }
+
+  function ensureLocalTile() {
+    var tile = createTileElement('local', roleLabel(myRole) + ' (You)');
+    videoGrid.appendChild(tile);
+    var video = tile.querySelector('video');
+    if (localStream) {
+      video.srcObject = localStream;
+      video.play().catch(function () {});
+    } else {
+      tile.classList.add('vrs-no-media');
+    }
+    updateGridLayout();
+  }
+
+  function handleRemoteStream(peerId, stream, role) {
+    var tile = remoteTiles[peerId];
+    if (!tile) {
+      tile = createTileElement(peerId, roleLabel(role));
+      remoteTiles[peerId] = tile;
+      videoGrid.appendChild(tile);
+      updateGridLayout();
+    } else if (role) {
+      tile.querySelector('.vrs-tile-label').textContent = roleLabel(role);
+    }
+    var video = tile.querySelector('video');
+    if (video.srcObject !== stream) video.srcObject = stream;
+    tile.classList.remove('vrs-no-media');
+    video.play().catch(function () {});
+    setConnectionBanner('Live — ' + (videoGrid.children.length) + ' participant(s) in call.', 'success');
+  }
+
+  function handleRemoteRemoved(peerId) {
+    var tile = remoteTiles[peerId];
+    if (tile) {
+      tile.remove();
+      delete remoteTiles[peerId];
+      updateGridLayout();
+      setConnectionBanner('A participant left the call.', 'warning');
+    }
+  }
+
+  function handleParticipantsChange(participants) {
+    // No-op hook point today; kept for future presence-based UI (e.g. "X is typing").
+    void participants;
+  }
+
+  function handlePeerState(peerId, state) {
+    var tile = remoteTiles[peerId];
+    if (!tile) return;
+    var dot = tile.querySelector('.vrs-dot');
+    dot.className = 'vrs-dot ' + (
+      state === 'connected' ? 'vrs-dot-good' :
+      (state === 'failed' || state === 'disconnected' || state === 'closed') ? 'vrs-dot-bad' :
+      'vrs-dot-pending'
+    );
+  }
+
+  // ---- Chat ----
+  function handleChatMessage(msg) {
+    appendChatMessageToDOM(msg);
+    if (!chatOpen) {
+      unreadCount += 1;
+      updateChatBadge();
+    }
+  }
+
+  function appendChatMessageToDOM(msg) {
+    var el = document.createElement('div');
+    el.className = 'vrs-chat-msg' + (msg.senderId === myId ? ' vrs-mine' : '');
+    var roleEl = document.createElement('span');
+    roleEl.className = 'vrs-chat-role';
+    roleEl.textContent = msg.senderId === myId ? 'You' : roleLabel(msg.role);
+    var textEl = document.createElement('span');
+    textEl.textContent = msg.text;
+    el.appendChild(roleEl);
+    el.appendChild(textEl);
+    chatMessages.appendChild(el);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  }
+
+  function updateChatBadge() {
+    if (unreadCount > 0) {
+      chatUnreadBadge.hidden = false;
+      chatUnreadBadge.textContent = String(unreadCount);
+    } else {
+      chatUnreadBadge.hidden = true;
+    }
+  }
+
+  function onToggleChatTap() {
+    chatOpen = !chatOpen;
+    chatPanel.classList.toggle('vrs-open', chatOpen);
+    if (chatOpen) {
+      unreadCount = 0;
+      updateChatBadge();
+    }
+  }
+
+  function onSendChatTap() {
+    var text = chatInput.value.trim();
+    if (!text || !roomId) return;
+    VRS.sendChatMessage(roomId, myId, myRole, text);
+    chatInput.value = '';
+  }
+
+  // ---- Mic / camera toggles ----
+  function onToggleMicTap() {
+    if (!localStream) return;
+    micEnabled = !micEnabled;
+    localStream.getAudioTracks().forEach(function (t) { t.enabled = micEnabled; });
+    btnToggleMic.classList.toggle('vrs-ctrl-off', !micEnabled);
+    btnToggleMic.querySelector('.vrs-ctrl-icon').textContent = micEnabled ? '🎤' : '🔇';
+  }
+
+  function onToggleCamTap() {
+    if (!localStream) return;
+    camEnabled = !camEnabled;
+    localStream.getVideoTracks().forEach(function (t) { t.enabled = camEnabled; });
+    btnToggleCam.classList.toggle('vrs-ctrl-off', !camEnabled);
+    var localTile = videoGrid.querySelector('[data-peer="local"]');
+    if (localTile) localTile.classList.toggle('vrs-no-media', !camEnabled);
+  }
+
+  // ---- Add third party (dial-pad screen) ----
+  function onAddThirdTap() {
+    var code = roomId || '----';
+    thirdPartyCodeBoxes.innerHTML = '';
+    code.split('').forEach(function (ch) {
+      var span = document.createElement('span');
+      span.className = 'vrs-code-digit';
+      span.textContent = ch;
+      thirdPartyCodeBoxes.appendChild(span);
+    });
+    var link = window.location.origin + window.location.pathname + '?room=' + code + '&role=third';
+    thirdPartyLinkInput.value = link;
+    copyConfirmText.hidden = true;
+    showScreen('thirdparty');
+  }
+
+  function onCopyLinkTap() {
+    var value = thirdPartyLinkInput.value;
+    function showCopied() {
+      copyConfirmText.hidden = false;
+      setTimeout(function () { copyConfirmText.hidden = true; }, 2000);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(value).then(showCopied).catch(function () {
+        fallbackCopy(value, showCopied);
+      });
+    } else {
+      fallbackCopy(value, showCopied);
+    }
+  }
+
+  function fallbackCopy(value, cb) {
+    try {
+      thirdPartyLinkInput.removeAttribute('readonly');
+      thirdPartyLinkInput.select();
+      document.execCommand('copy');
+      thirdPartyLinkInput.setAttribute('readonly', 'readonly');
+      cb();
+    } catch (err) {
+      console.error('VRS: fallback copy failed', err);
+    }
+  }
+
+  function onCloseThirdPartyTap() {
+    showScreen('call');
+  }
+
+  // ---- End / leave call ----
+  function endCall(endForEveryone) {
+    if (ended) return;
+    ended = true;
+    try { if (mesh) mesh.stop(); } catch (err) { console.error(err); }
+    try {
+      if (localStream) localStream.getTracks().forEach(function (t) { t.stop(); });
+    } catch (err) { console.error(err); }
+    if (chatUnsub) { chatUnsub(); chatUnsub = null; }
+    if (roomUnsub) { roomUnsub(); roomUnsub = null; }
+    if (roomId) {
+      VRS.removeParticipant(roomId, myId);
+      if (endForEveryone) VRS.endRoom(roomId);
+    }
+    Object.keys(remoteTiles).forEach(function (pid) { remoteTiles[pid].remove(); });
+    remoteTiles = {};
+    videoGrid.innerHTML = '';
+    updateGridLayout();
+    notifyParentClose();
+
+    if (myRole === 'deaf') {
+      roomId = null;
+      ended = false;
+      showScreen('precall');
+      btnStartCall.hidden = false;
+      btnStartCall.disabled = false;
+      setPrecallStatus('Call ended.');
+    } else {
+      showScreen('error');
+      setErrorMessage('You left the call.');
+    }
+  }
+
+  function onEndOrLeaveTap() {
+    endCall(myRole === 'deaf');
+  }
+
+  function notifyParentClose() {
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ vrsWidgetAction: 'close' }, '*');
+      }
+    } catch (err) {
+      console.error('VRS: notifyParentClose failed', err);
+    }
+  }
+
+  // ---- Wire up events ----
+  function wireUpUI() {
+    btnEnableCamera.addEventListener('click', onEnableCameraTap);
+    btnStartCall.addEventListener('click', onStartCallTap);
+    btnJoinCall.addEventListener('click', onJoinCallTap);
+    btnManualJoin.addEventListener('click', onManualJoinTap);
+    btnCancelRinging.addEventListener('click', onCancelRingingTap);
+
+    btnToggleMic.addEventListener('click', onToggleMicTap);
+    btnToggleCam.addEventListener('click', onToggleCamTap);
+    btnToggleChat.addEventListener('click', onToggleChatTap);
+    btnCloseChat.addEventListener('click', onToggleChatTap);
+    btnAddThird.addEventListener('click', onAddThirdTap);
+    btnEndCall.addEventListener('click', onEndOrLeaveTap);
+    btnSendChat.addEventListener('click', onSendChatTap);
+    chatInput.addEventListener('keydown', function (evt) {
+      if (evt.key === 'Enter') onSendChatTap();
+    });
+
+    btnCopyLink.addEventListener('click', onCopyLinkTap);
+    btnCloseThirdParty.addEventListener('click', onCloseThirdPartyTap);
+
+    btnReload.addEventListener('click', function () { window.location.reload(); });
+
+    window.addEventListener('beforeunload', function () {
+      try {
+        if (localStream) localStream.getTracks().forEach(function (t) { t.stop(); });
+      } catch (err) { /* ignore on unload */ }
+    });
+  }
+
+  // ---- Boot ----
+  function boot() {
+    initFirebase();
+    wireUpUI();
+    applyRoleToUI();
+    disableCallActionsIfUnconfigured();
+
+    if (myRole === 'third' && !roomId) {
+      showScreen('error');
+      setErrorMessage('This link is missing a room code. Ask for a new invite link.');
+      return;
+    }
+
+    showScreen('precall');
+
+    if (roomId && firebaseReady) {
+      checkExistingRoomThenReveal();
+    } else if (!roomId && myRole !== 'deaf' && firebaseReady) {
+      setPrecallStatus('A room code or link is required to join as ' + roleLabel(myRole) + '.');
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot);
+  } else {
+    boot();
+  }
+
+} catch (fatalErr) {
+  console.error('VRS call.html: fatal error', fatalErr);
+  try {
+    document.body.innerHTML =
+      '<div style="font-family:sans-serif;padding:24px;color:#fff;background:#3a1420;min-height:100vh;">' +
+      '<h2>Something went wrong loading this call.</h2>' +
+      '<p>Please close this window and try again. (' + (fatalErr && fatalErr.message ? fatalErr.message : 'unknown error') + ')</p>' +
+      '</div>';
+  } catch (renderErr) { /* last resort, nothing more we can do */ }
+}
+})();
+</script>
+</body>
+</html>
