@@ -39,6 +39,11 @@ var VRS_FIREBASE_CONFIG = {
   appId: "1:476403906740:web:3819a81a3194ae443a3fe1"
 };
 
+// Paste the Cloudflare Worker URL from PUSH-SETUP.md here, e.g.
+// "https://vrs-push.YOUR-SUBDOMAIN.workers.dev"
+var VRS_PUSH_ENDPOINT = "";
+var VRS_VAPID_PUBLIC_KEY = "BGA0lA1VmtZWDqsBAgm95Qk_oOnFt2LO2m_of29JnhmHMLRGnbtz813bNUoNYfvlBC7IFp3qJdg3vH3zd6T92K8";
+
 /* ============================================================================
    Everything below this line is app plumbing — no need to edit it.
    ============================================================================ */
@@ -422,7 +427,26 @@ var VRS = (function () {
     return {
       iceServers: [
         { urls: "stun:stun.l.google.com:19302" },
-        { urls: "stun:stun1.l.google.com:19302" }
+        { urls: "stun:stun1.l.google.com:19302" },
+        // TURN relay. STUN alone fails whenever both peers sit behind strict
+        // NAT — most cellular carriers, many school and corporate networks —
+        // which shows up as a call that connects and exchanges chat but never
+        // displays remote video. These are Open Relay's free public servers.
+        {
+          urls: "turn:openrelay.metered.ca:80",
+          username: "openrelayproject",
+          credential: "openrelayproject"
+        },
+        {
+          urls: "turn:openrelay.metered.ca:443",
+          username: "openrelayproject",
+          credential: "openrelayproject"
+        },
+        {
+          urls: "turn:openrelay.metered.ca:443?transport=tcp",
+          username: "openrelayproject",
+          credential: "openrelayproject"
+        }
       ]
     };
   }
@@ -586,9 +610,15 @@ var VRS = (function () {
           }
         });
 
-        Object.keys(peers).forEach(function (pid) {
-          if (ids.indexOf(pid) === -1) removePeer(pid);
-        });
+        // Only prune peers when the snapshot actually lists somebody. An empty
+        // participants node arrives transiently (and when the node is removed
+        // on disconnect), and pruning on it would tear down a live, working
+        // connection mid-call.
+        if (ids.length) {
+          Object.keys(peers).forEach(function (pid) {
+            if (ids.indexOf(pid) === -1) removePeer(pid);
+          });
+        }
       });
     }
 
@@ -601,6 +631,123 @@ var VRS = (function () {
     }
 
     return { start: start, stop: stop, peers: peers };
+  }
+
+  // ---- Web Push (background alerts for interpreters) ------------------------
+  // Entirely separate from Firebase: subscriptions live in Cloudflare KV via
+  // the Worker at VRS_PUSH_ENDPOINT, and the Worker holds the VAPID private
+  // key. Every function here must no-op harmlessly when the endpoint hasn't
+  // been configured yet, so the rest of the app keeps working untouched.
+
+  function pushConfigured() {
+    return typeof VRS_PUSH_ENDPOINT === "string" && VRS_PUSH_ENDPOINT.trim() !== "";
+  }
+
+  // Converts a base64url-encoded string (the VAPID public key format) into
+  // the Uint8Array that pushManager.subscribe() requires as
+  // applicationServerKey. Getting the padding/charset wrong here is a classic
+  // source of "invalid raw ECDSA P-256 public key" subscribe failures.
+  function urlBase64ToUint8Array(base64String) {
+    var padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+    var base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+    var rawData = atob(base64);
+    var outputArray = new Uint8Array(rawData.length);
+    for (var i = 0; i < rawData.length; i++) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+  }
+
+  function subscribeToPush() {
+    if (!pushConfigured()) return Promise.resolve(null);
+    try {
+      if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+        return Promise.resolve(null);
+      }
+      return navigator.serviceWorker
+        .register("sw.js")
+        .then(function (registration) {
+          return Notification.requestPermission().then(function (permission) {
+            if (permission !== "granted") return null;
+            return registration.pushManager
+              .subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array(VRS_VAPID_PUBLIC_KEY)
+              })
+              .then(function (subscription) {
+                return fetch(VRS_PUSH_ENDPOINT + "/subscribe", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(subscription)
+                }).then(function () {
+                  return subscription;
+                });
+              });
+          });
+        })
+        .catch(function (err) {
+          console.error("VRS: subscribeToPush failed", err);
+          return null;
+        });
+    } catch (err) {
+      console.error("VRS: subscribeToPush failed", err);
+      return Promise.resolve(null);
+    }
+  }
+
+  function unsubscribeFromPush() {
+    if (!pushConfigured()) return Promise.resolve(false);
+    try {
+      if (!("serviceWorker" in navigator)) return Promise.resolve(false);
+      return navigator.serviceWorker
+        .getRegistration()
+        .then(function (registration) {
+          if (!registration) return false;
+          return registration.pushManager.getSubscription().then(function (subscription) {
+            if (!subscription) return false;
+            return fetch(VRS_PUSH_ENDPOINT + "/unsubscribe", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ endpoint: subscription.endpoint })
+            })
+              .catch(function (err) {
+                console.error("VRS: unsubscribeFromPush server call failed", err);
+              })
+              .then(function () {
+                return subscription.unsubscribe();
+              });
+          });
+        })
+        .catch(function (err) {
+          console.error("VRS: unsubscribeFromPush failed", err);
+          return false;
+        });
+    } catch (err) {
+      console.error("VRS: unsubscribeFromPush failed", err);
+      return Promise.resolve(false);
+    }
+  }
+
+  // Fire-and-forget: tells the Worker to push every subscribed interpreter.
+  // A push failure must never block or break a call, so every error path here
+  // is swallowed rather than surfaced.
+  function notifyInterpreters(roomId) {
+    if (!pushConfigured()) return Promise.resolve();
+    try {
+      return fetch(VRS_PUSH_ENDPOINT + "/notify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roomId: roomId }),
+        keepalive: true
+      })
+        .catch(function (err) {
+          console.error("VRS: notifyInterpreters failed", err);
+        })
+        .then(function () {});
+    } catch (err) {
+      console.error("VRS: notifyInterpreters failed", err);
+      return Promise.resolve();
+    }
   }
 
   return {
@@ -630,6 +777,10 @@ var VRS = (function () {
     isStale: isStale,
     createMesh: createMesh,
     iceServerConfig: iceServerConfig,
+    pushConfigured: pushConfigured,
+    subscribeToPush: subscribeToPush,
+    unsubscribeFromPush: unsubscribeFromPush,
+    notifyInterpreters: notifyInterpreters,
     ROOT_PATH: VRS_ROOT_PATH
   };
 })();

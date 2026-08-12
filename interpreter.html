@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="manifest" href="manifest.json">
 <title>VRS Interpreter Dashboard</title>
 <style>
   :root{
@@ -60,6 +61,19 @@
   #onlineStatusText.vrs-status-offline{ color:var(--vrs-muted); }
 
   #interpreterIdText{ font-size:12px;color:var(--vrs-muted); }
+
+  .vrs-push-wrap{ display:flex;flex-direction:column;align-items:flex-end;gap:4px;margin-top:8px; }
+  .vrs-push-btn{
+    appearance:none;border:none;border-radius:10px;padding:8px 14px;font-size:12px;font-weight:700;
+    cursor:pointer;font-family:inherit;color:#fff;white-space:nowrap;
+    background:linear-gradient(135deg,var(--vrs-purple),var(--vrs-purple-dark));
+    -webkit-tap-highlight-color:transparent;
+  }
+  .vrs-push-btn:disabled{ opacity:.7;cursor:not-allowed; }
+  .vrs-push-btn.vrs-push-on{
+    background:var(--vrs-panel-2);border:1px solid var(--vrs-success);color:var(--vrs-success);
+  }
+  #pushDeniedText{ font-size:11px;color:var(--vrs-danger);max-width:220px;text-align:right;line-height:1.4; }
 
   main{ flex:1 1 auto;min-height:0;display:flex;flex-direction:column;padding:20px; }
 
@@ -213,6 +227,10 @@
           <div class="vrs-knob"></div>
         </div>
       </div>
+      <div class="vrs-push-wrap" id="pushWrap" hidden>
+        <button type="button" class="vrs-push-btn" id="btnEnablePush">🔔 Enable background alerts</button>
+        <div id="pushDeniedText" hidden>Notifications are blocked for this site. Re-enable them in your browser's site settings to receive background alerts.</div>
+      </div>
     </div>
   </header>
 
@@ -301,6 +319,10 @@ try {
   var btnAcceptCall = document.getElementById('btnAcceptCall');
   var btnDeclineCall = document.getElementById('btnDeclineCall');
 
+  var pushWrap = document.getElementById('pushWrap');
+  var btnEnablePush = document.getElementById('btnEnablePush');
+  var pushDeniedText = document.getElementById('pushDeniedText');
+
   var connectionBanner = document.getElementById('connectionBanner');
   var videoGrid = document.getElementById('videoGrid');
   var btnToggleMic = document.getElementById('btnToggleMic');
@@ -321,6 +343,9 @@ try {
   var firebaseReady = false;
   var queueUnsub = null;
   var currentQueueSnapshot = [];
+  // Rooms this interpreter declined, so the dashboard can show a record of them
+  // instead of silently dropping the call from view.
+  var declinedRoomIds = {};
   var activeIncomingRoomId = null;
   var roomId = null;
   var localStream = null;
@@ -357,6 +382,84 @@ try {
       onlineSwitch.style.opacity = '0.5';
       waitingSubtitle.textContent = 'Firebase is not configured yet — see the banner above before going online.';
     }
+  }
+
+  // ---- Background push alerts (works with the dashboard tab closed) --------
+  // Entirely independent of the Firebase-backed foreground alerting above —
+  // this reflects VRS_PUSH_ENDPOINT's push subscription state on the button.
+  // If VRS_PUSH_ENDPOINT is unset, VRS.pushConfigured() is false and the
+  // button stays hidden; nothing else here runs.
+
+  function setPushButtonState(subscribed) {
+    btnEnablePush.disabled = subscribed;
+    btnEnablePush.classList.toggle('vrs-push-on', subscribed);
+    btnEnablePush.textContent = subscribed ? '🔔 Background alerts on' : '🔔 Enable background alerts';
+  }
+
+  function checkPushSubscriptionState() {
+    try {
+      if (!('serviceWorker' in navigator)) {
+        setPushButtonState(false);
+        return;
+      }
+      navigator.serviceWorker
+        .getRegistration()
+        .then(function (registration) {
+          if (!registration) {
+            setPushButtonState(false);
+            return null;
+          }
+          return registration.pushManager.getSubscription();
+        })
+        .then(function (subscription) {
+          setPushButtonState(!!subscription);
+        })
+        .catch(function (err) {
+          console.error('VRS: checkPushSubscriptionState failed', err);
+          setPushButtonState(false);
+        });
+    } catch (err) {
+      console.error('VRS: checkPushSubscriptionState failed', err);
+      setPushButtonState(false);
+    }
+  }
+
+  function updatePushButtonUI() {
+    try {
+      if (!VRS.pushConfigured()) {
+        pushWrap.hidden = true;
+        return;
+      }
+      pushWrap.hidden = false;
+      if ('Notification' in window && Notification.permission === 'denied') {
+        btnEnablePush.disabled = true;
+        btnEnablePush.classList.remove('vrs-push-on');
+        btnEnablePush.textContent = '🔔 Background alerts blocked';
+        pushDeniedText.hidden = false;
+        return;
+      }
+      pushDeniedText.hidden = true;
+      checkPushSubscriptionState();
+    } catch (err) {
+      console.error('VRS: updatePushButtonUI failed', err);
+    }
+  }
+
+  function onEnablePushTap() {
+    btnEnablePush.disabled = true;
+    btnEnablePush.textContent = 'Enabling…';
+    VRS.subscribeToPush()
+      .then(function (subscription) {
+        if (subscription) {
+          setPushButtonState(true);
+        } else {
+          updatePushButtonUI();
+        }
+      })
+      .catch(function (err) {
+        console.error('VRS: onEnablePushTap failed', err);
+        updatePushButtonUI();
+      });
   }
 
   // ---- Online/offline toggle ----
@@ -530,8 +633,13 @@ try {
 
   function onDeclineCall() {
     if (!activeIncomingRoomId) return;
+    // Mark the room too, not just the queue — the caller listens to the room,
+    // so a queue-only update leaves them ringing with no idea they were declined.
+    VRS.updateRoom(activeIncomingRoomId, { status: 'declined' });
     VRS.updateQueueEntry(activeIncomingRoomId, { status: 'declined' });
+    declinedRoomIds[activeIncomingRoomId] = Date.now();
     hideIncomingCall();
+    renderQueueList();
   }
 
   function onAcceptCall() {
@@ -777,6 +885,9 @@ try {
 
     btnAcceptCall.addEventListener('click', onAcceptCall);
     btnDeclineCall.addEventListener('click', onDeclineCall);
+
+    btnEnablePush.addEventListener('click', onEnablePushTap);
+    updatePushButtonUI();
 
     btnToggleMic.addEventListener('click', onToggleMicTap);
     btnToggleCam.addEventListener('click', onToggleCamTap);

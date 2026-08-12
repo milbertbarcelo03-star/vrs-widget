@@ -641,6 +641,10 @@ try {
       });
     }).then(function () {
       VRS.addParticipant(roomId, myId, { role: 'deaf' });
+      // Background push alert for interpreters who enabled it — fire-and-forget,
+      // notifyInterpreters() swallows its own errors so this can never affect
+      // the call being started.
+      VRS.notifyInterpreters(roomId);
       attachRoomListener();
       enterRingingScreen();
     }).catch(function (err) {
@@ -725,11 +729,29 @@ try {
       if (room.status === 'active' && activeScreenName === 'ringing') {
         if (ringingTimerHandle) clearInterval(ringingTimerHandle);
         enterCallScreen();
+      } else if (room.status === 'declined' && activeScreenName === 'ringing') {
+        if (ringingTimerHandle) clearInterval(ringingTimerHandle);
+        handleDeclined();
       } else if (room.status === 'ended' && !ended && activeScreenName !== 'precall') {
         setConnectionBanner('The call has ended.', 'danger');
         setTimeout(function () { endCall(false); }, 1200);
       }
     });
+  }
+
+  // The interpreter declined. Return the caller to the start with a clear,
+  // non-blaming explanation and the call ready to place again.
+  function handleDeclined() {
+    if (roomUnsub) { roomUnsub(); roomUnsub = null; }
+    if (roomId) {
+      VRS.removeParticipant(roomId, myId);
+      VRS.removeFromQueue(roomId);
+    }
+    roomId = null;
+    showScreen('precall');
+    btnStartCall.hidden = false;
+    btnStartCall.disabled = false;
+    setPrecallStatus('That interpreter could not take the call right now. You can try again — another interpreter may be available.');
   }
 
   // ---- Call screen ----
@@ -960,10 +982,21 @@ try {
     if (myRole === 'deaf') {
       roomId = null;
       ended = false;
+      mesh = null;
+      // The tracks above were stopped, so this stream is dead. It must be
+      // dropped and re-acquired, or the next call would attach ended tracks —
+      // the caller sees no preview and the far side receives no video.
+      localStream = null;
+      try {
+        localPreviewVideo.srcObject = null;
+        cameraPreviewWrap.classList.remove('vrs-has-stream');
+      } catch (err) { console.error('VRS: preview reset failed', err); }
       showScreen('precall');
       btnStartCall.hidden = false;
       btnStartCall.disabled = false;
       setPrecallStatus('Call ended.');
+      // Permission was already granted, so this re-opens the camera silently.
+      onEnableCameraTap();
     } else {
       showScreen('error');
       setErrorMessage('You left the call.');

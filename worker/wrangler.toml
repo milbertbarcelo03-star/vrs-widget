@@ -1,0 +1,18 @@
+name = "vrs-push"
+main = "index.js"
+compatibility_date = "2024-11-01"
+
+# KV namespace for push subscriptions (and the /notify rate-limit counters).
+# Create it with:
+#   wrangler kv namespace create SUBS
+# then paste the "id" it prints below, replacing the placeholder.
+# See PUSH-SETUP.md for the full walkthrough.
+#
+# [[kv_namespaces]]
+# binding = "SUBS"
+# id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+
+# Secrets (VAPID_PRIVATE_KEY, VAPID_PUBLIC_KEY) are never set here — set them
+# with `wrangler secret put VAPID_PRIVATE_KEY` / `wrangler secret put
+# VAPID_PUBLIC_KEY`. They become available in the Worker as env.VAPID_PRIVATE_KEY
+# and env.VAPID_PUBLIC_KEY.
