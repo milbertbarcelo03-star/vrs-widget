@@ -56,7 +56,9 @@ Then reload the app and place a test call to confirm everything still connects.
 dashboard receives live calls from deaf callers. Without it, anyone with the
 link could intercept those calls.
 
-- **Current access phrase: `ctech-vrs-2026`**
+- **The access phrase is deliberately not written down in this repository.**
+  This repo is public, so publishing the phrase here would defeat the gate.
+  It is shared directly with interpreters instead.
 - Only the SHA-256 hash is stored in the code — the phrase itself never appears.
 - Three wrong attempts triggers a 60-second lockout.
 - Unlocking lasts for the browser session; closing the tab re-locks it.
