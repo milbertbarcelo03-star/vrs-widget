@@ -3,6 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="manifest" href="manifest-call.json">
+<meta name="theme-color" content="#0a1220">
+<!-- iOS home-screen app. iOS ignores the web manifest for these three,
+     so they must be declared as Apple-specific meta tags. -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="VRS Call">
+<link rel="apple-touch-icon" href="icon-192.png">
 <title>VRS Interpreter Call</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -106,6 +115,9 @@
     flex-direction:column;
     min-height:0;
     padding:var(--sp-6);
+    /* Installed on iOS the status bar is translucent, so the top of the
+       screen sits under the notch unless the inset is honoured. */
+    padding-top:max(var(--sp-6), env(safe-area-inset-top));
     padding-bottom:max(var(--sp-6), env(safe-area-inset-bottom));
   }
 
@@ -192,6 +204,46 @@
     font-size:var(--fs-sm);line-height:1.55;box-shadow:var(--shadow-sm);
   }
   .vrs-error-box strong{ font-family:var(--vrs-font-display); }
+
+  .vrs-name-field{
+    margin:0 auto var(--sp-5);max-width:420px;width:100%;text-align:left;
+  }
+  .vrs-name-field label{
+    font-size:var(--fs-sm);color:var(--vrs-muted);display:block;margin-bottom:var(--sp-2);
+  }
+  #callerNameInput{
+    width:100%;min-height:44px;
+    background:var(--vrs-panel);border:1px solid var(--vrs-border);color:var(--vrs-text);
+    border-radius:var(--radius-sm);padding:10px 14px;font-size:var(--fs-base);
+    font-family:var(--vrs-font-body);
+    transition:border-color var(--dur-fast) var(--ease-standard);
+  }
+  #callerNameInput:focus{ outline:2px solid var(--vrs-purple);outline-offset:1px;border-color:var(--vrs-purple); }
+
+  .vrs-install-hint{
+    margin:var(--sp-5) auto 0;max-width:420px;width:100%;
+    background:var(--vrs-panel);border:1px solid var(--vrs-border);
+    border-radius:var(--radius-md);padding:var(--sp-4);
+    box-shadow:var(--shadow-sm);
+  }
+  .vrs-install-hint[hidden]{ display:none; }
+  .vrs-install-title{
+    font-family:var(--vrs-font-display);font-weight:700;font-size:var(--fs-base);
+    margin:0 0 var(--sp-2);display:flex;align-items:center;gap:var(--sp-2);
+  }
+  .vrs-install-steps{ margin:0;padding-left:var(--sp-5);color:var(--vrs-muted);font-size:var(--fs-sm);line-height:1.6; }
+  .vrs-install-steps li{ margin-bottom:var(--sp-1); }
+  .vrs-share-glyph{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:20px;height:20px;border-radius:5px;background:var(--vrs-panel-2);
+    border:1px solid var(--vrs-border);color:var(--vrs-purple-light);
+    font-size:var(--fs-sm);vertical-align:-4px;
+  }
+  .vrs-install-dismiss{
+    margin-top:var(--sp-3);background:none;border:none;color:var(--vrs-muted);
+    font-size:var(--fs-sm);text-decoration:underline;cursor:pointer;padding:var(--sp-1) 0;min-height:32px;
+  }
+  .vrs-install-dismiss:hover{ color:var(--vrs-text); }
 
   .vrs-manual-join{
     margin:var(--sp-7) auto 0;max-width:420px;width:100%;
@@ -382,6 +434,19 @@
     <h1 class="vrs-title" id="precallTitle">Call a Sign Language Interpreter</h1>
     <p class="vrs-subtitle" id="precallSubtitle">Turn on your camera and microphone, then start the call. You can continue without a camera if needed.</p>
 
+    <div class="vrs-name-field">
+      <label for="callerNameInput">Your first name (optional)</label>
+      <input
+        id="callerNameInput"
+        type="text"
+        maxlength="40"
+        placeholder="e.g. Maria"
+        autocapitalize="words"
+        autocorrect="off"
+        spellcheck="false"
+        autocomplete="given-name">
+    </div>
+
     <div class="vrs-camera-wrap" id="cameraPreviewWrap">
       <video id="localPreviewVideo" autoplay playsinline muted></video>
       <div class="vrs-camera-placeholder">
@@ -420,6 +485,20 @@
           autocomplete="off">
         <button type="button" class="vrs-btn vrs-btn-secondary" id="btnManualJoin">Join</button>
       </div>
+    </div>
+
+  <div class="vrs-install-hint" id="installHint" hidden>
+      <p class="vrs-install-title"><span aria-hidden="true">📲</span> Add this to your Home Screen</p>
+      <ol class="vrs-install-steps" id="installStepsIos">
+        <li>Tap the Share button <span class="vrs-share-glyph" aria-hidden="true">&#x2191;</span> at the bottom of Safari.</li>
+        <li>Scroll down and tap <strong>Add to Home Screen</strong>.</li>
+        <li>Tap <strong>Add</strong>. VRS Call opens like an app from then on.</li>
+      </ol>
+      <div id="installStepsGeneric" hidden>
+        <p class="vrs-install-steps" style="padding-left:0;">Install VRS Call so it opens straight from your home screen.</p>
+        <button type="button" class="vrs-btn vrs-btn-secondary" id="btnInstall">Install app</button>
+      </div>
+      <button type="button" class="vrs-install-dismiss" id="btnInstallDismiss">Not now</button>
     </div>
   </section>
 
@@ -580,6 +659,7 @@ try {
   var ringingStartTs = null;
   var ringingTimerHandle = null;
   var chatOpen = false;
+  var interpreterDisplayName = null;
   var unreadCount = 0;
   var micEnabled = true;
   var camEnabled = true;
@@ -608,6 +688,36 @@ try {
 
   function setErrorMessage(text) {
     errorMessageText.textContent = text || 'This call may have ended or the link may have expired.';
+  }
+
+  // ---- Caller identity -----------------------------------------------------
+  // Deliberately a name on the device, not an account. A deaf student in
+  // distress must never hit a signup wall, so this is optional and is only
+  // used to show the interpreter a person instead of "Room 4468".
+
+  function getSavedCallerName() {
+    try {
+      return (localStorage.getItem('vrsCallerName') || '').trim();
+    } catch (err) {
+      return '';
+    }
+  }
+
+  function saveCallerName(name) {
+    try {
+      if (name) localStorage.setItem('vrsCallerName', name);
+      else localStorage.removeItem('vrsCallerName');
+    } catch (err) {
+      console.error('VRS: could not remember caller name', err);
+    }
+  }
+
+  // Trimmed and length-capped to match the database rules, which reject a
+  // callerName longer than 40 characters and would fail the whole write.
+  function currentCallerName() {
+    var el = document.getElementById('callerNameInput');
+    if (!el) return '';
+    return (el.value || '').trim().slice(0, 40);
   }
 
   function setConnectionBanner(text, kind) {
@@ -726,6 +836,8 @@ try {
     btnStartCall.disabled = true;
     setPrecallStatus('Starting call…');
     var candidateId = VRS.generateRoomCode();
+    var callerNameForCall = currentCallerName();
+    saveCallerName(callerNameForCall);
 
     VRS.ready().then(function () {
       return VRS.getRoom(candidateId);
@@ -734,17 +846,36 @@ try {
         candidateId = VRS.generateRoomCode();
       }
       roomId = candidateId;
-      return VRS.createRoom(roomId, {
+      var roomData = {
         status: 'ringing',
         deafId: myId,
         hasCamera: !!localStream
+      };
+      // Only send the field when it has a value: the rules validate
+      // callerName as a non-empty-capped string, and writing "" is pointless.
+      if (callerNameForCall) roomData.callerName = callerNameForCall;
+      return VRS.createRoom(roomId, roomData).catch(function (err) {
+        if (!roomData.callerName) throw err;
+        // The deployed database rules may predate callerName and reject the
+        // whole write. A name is a nicety; placing the call is not. Drop the
+        // name and retry rather than leaving a deaf caller unable to dial.
+        console.error('VRS: room write rejected with callerName, retrying without', err);
+        delete roomData.callerName;
+        return VRS.createRoom(roomId, roomData);
       });
     }).then(function () {
-      return VRS.pushToQueue(roomId, {
+      var queueData = {
         roomId: roomId,
         callerRole: 'deaf',
         status: 'waiting',
         hasCamera: !!localStream
+      };
+      if (callerNameForCall) queueData.callerName = callerNameForCall;
+      return VRS.pushToQueue(roomId, queueData).catch(function (err) {
+        if (!queueData.callerName) throw err;
+        console.error('VRS: queue write rejected with callerName, retrying without', err);
+        delete queueData.callerName;
+        return VRS.pushToQueue(roomId, queueData);
       });
     }).then(function () {
       VRS.addParticipant(roomId, myId, { role: 'deaf' });
@@ -833,9 +964,21 @@ try {
     if (roomUnsub) return;
     roomUnsub = VRS.listenRoom(roomId, function (room) {
       if (!room) return;
+      // Tells the caller who picked up, rather than leaving them looking at a
+      // bare "Connecting..." while a stranger's video appears.
+      if (room.interpreterName && room.interpreterName !== interpreterDisplayName) {
+        interpreterDisplayName = room.interpreterName;
+        if (activeScreenName === 'call') {
+          setConnectionBanner('Connected to ' + interpreterDisplayName, 'success');
+        }
+      }
+
       if (room.status === 'active' && activeScreenName === 'ringing') {
         if (ringingTimerHandle) clearInterval(ringingTimerHandle);
         enterCallScreen();
+        if (room.interpreterName) {
+          setConnectionBanner('Connected to ' + room.interpreterName, 'success');
+        }
       } else if (room.status === 'declined' && activeScreenName === 'ringing') {
         if (ringingTimerHandle) clearInterval(ringingTimerHandle);
         handleDeclined();
@@ -1186,10 +1329,99 @@ try {
     });
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', boot);
-  } else {
+  // ---- PWA install ---------------------------------------------------------
+  // iOS never fires beforeinstallprompt and offers no install button, so the
+  // only way onto an iPhone home screen is the Share sheet. Because the users
+  // here are deaf, that has to be shown visually rather than explained in
+  // audio or left to discovery.
+
+  var installPromptEvent = null;
+
+  function setupInstallUi() {
+    var hint = document.getElementById('installHint');
+    if (!hint) return;
+
+    // Already installed, or the user said no once — don't nag.
+    if (VRS.isInstalledApp()) return;
+    try {
+      if (localStorage.getItem('vrsInstallHintDismissed') === '1') return;
+    } catch (err) {
+      // Private mode can throw on localStorage; showing the hint is harmless.
+    }
+
+    var iosSteps = document.getElementById('installStepsIos');
+    var genericSteps = document.getElementById('installStepsGeneric');
+    var btnDismiss = document.getElementById('btnInstallDismiss');
+    var btnAdd = document.getElementById('btnInstall');
+
+    if (btnDismiss) {
+      btnDismiss.addEventListener('click', function () {
+        hint.hidden = true;
+        try {
+          localStorage.setItem('vrsInstallHintDismissed', '1');
+        } catch (err) {
+          console.error('VRS: could not persist install-hint dismissal', err);
+        }
+      });
+    }
+
+    if (VRS.isIOS()) {
+      if (iosSteps) iosSteps.hidden = false;
+      if (genericSteps) genericSteps.hidden = true;
+      hint.hidden = false;
+      return;
+    }
+
+    // Chrome/Edge/Android: wait for the browser to say it's installable, then
+    // offer a real one-tap button instead of instructions.
+    window.addEventListener('beforeinstallprompt', function (evt) {
+      evt.preventDefault();
+      installPromptEvent = evt;
+      if (iosSteps) iosSteps.hidden = true;
+      if (genericSteps) genericSteps.hidden = false;
+      hint.hidden = false;
+    });
+
+    if (btnAdd) {
+      btnAdd.addEventListener('click', function () {
+        if (!installPromptEvent) return;
+        installPromptEvent.prompt();
+        installPromptEvent.userChoice
+          .then(function () {
+            installPromptEvent = null;
+            hint.hidden = true;
+          })
+          .catch(function (err) {
+            console.error('VRS: install prompt failed', err);
+          });
+      });
+    }
+  }
+
+  function onReady() {
     boot();
+    try {
+      var nameEl = document.getElementById('callerNameInput');
+      if (nameEl) nameEl.value = getSavedCallerName();
+    } catch (err) {
+      console.error('VRS: could not prefill caller name', err);
+    }
+    try {
+      VRS.registerServiceWorker();
+    } catch (err) {
+      console.error('VRS: service worker registration failed', err);
+    }
+    try {
+      setupInstallUi();
+    } catch (err) {
+      console.error('VRS: install UI setup failed', err);
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', onReady);
+  } else {
+    onReady();
   }
 
 } catch (fatalErr) {

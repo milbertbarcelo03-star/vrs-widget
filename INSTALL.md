@@ -88,14 +88,19 @@ appears (allow notifications when the browser asks). The interpreter can work
 in other windows and still catch incoming calls — but **the tab must stay
 open**, since the alert comes from the page itself.
 
-The dashboard is protected by an access phrase, since whoever opens it receives
-live calls from deaf callers. The interpreter enters the phrase once per browser
-session, switches the toggle to **Online**, and keeps the tab open. Incoming
-calls flash on screen with Accept/Decline. If no interpreter is online, callers
-see a "waiting for an interpreter" screen until one accepts or they cancel.
+The dashboard requires an interpreter account, since whoever opens it receives
+live calls from deaf callers. The interpreter signs in with their email and
+password, switches the toggle to **Online**, and keeps the tab open. Incoming
+calls flash on screen with Accept/Decline, showing the caller's first name if
+they gave one. If no interpreter is online, callers see a "waiting for an
+interpreter" screen until one accepts or they cancel.
 
-**The access phrase is supplied separately — please don't post it on a public
-page.** Contact Milbert if you need it re-issued or changed.
+The first time an interpreter signs in they enter a display name and title
+(for example "Ana Reyes · ASL Interpreter"). Callers see this while the call
+connects, so they know who they have reached.
+
+**Accounts are created by Milbert in the Firebase console — there is no
+self-service signup.** Contact him to add or remove an interpreter.
 
 ---
 
@@ -116,11 +121,12 @@ page.** Contact Milbert if you need it re-issued or changed.
   school, and office networks work fine, but some strict corporate firewalls,
   VPNs, and cellular carriers can block the direct video connection. A
   production version would add a TURN relay server for full reliability.
-- **Access control:** the interpreter dashboard requires an access phrase, and
-  all database access requires an authenticated session with validated,
-  size-capped data. There are not yet per-user accounts, so anyone holding the
-  access phrase can act as the interpreter, and anyone holding a room link can
-  join that specific call. Keep both internal during the pilot.
+- **Access control:** the interpreter dashboard requires a per-interpreter
+  email/password account, and all database access requires an authenticated
+  session with validated, size-capped data. Only those accounts can read the
+  queue of waiting callers. Callers themselves stay anonymous on purpose, so
+  anyone holding a room link can still join that specific call — keep room
+  links internal during the pilot.
 
 ---
 

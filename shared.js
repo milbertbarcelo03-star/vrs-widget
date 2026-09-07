@@ -75,7 +75,11 @@ var VRS = (function () {
     return true;
   }
 
-  function init() {
+  // opts.autoAnonymous — set false on the interpreter dashboard, which signs in
+  // with a real email/password account instead. Signing in anonymously there
+  // would burn the identity the database rules use to gate the call queue:
+  // rules require sign_in_provider == 'password' to read it.
+  function init(opts) {
     if (app) return true;
     if (!isFirebaseConfigured()) {
       configured = false;
@@ -93,7 +97,8 @@ var VRS = (function () {
       // check. This needs no user interaction — the browser silently receives a
       // uid. Rules reject every read/write from unauthenticated clients, which
       // blocks scripted access to the database from outside the app.
-      authPromise = signInAnonymously();
+      var autoAnonymous = !opts || opts.autoAnonymous !== false;
+      authPromise = autoAnonymous ? signInAnonymously() : waitForExistingUser();
       // Mark the rejection as handled here so a sign-in failure doesn't surface
       // as an "uncaught (in promise)" error. ready() still sees and reports it.
       authPromise.catch(function () {});
@@ -113,18 +118,135 @@ var VRS = (function () {
           return;
         }
         var auth = firebase.auth();
-        if (auth.currentUser) {
-          resolve(auth.currentUser.uid);
-          return;
-        }
-        auth.onAuthStateChanged(function (user) {
-          if (user) resolve(user.uid);
+        var settled = false;
+        // auth.currentUser is null on a cold load until Firebase has restored
+        // the persisted session, so it cannot be checked synchronously. Wait
+        // for the first state callback instead.
+        var unsub = auth.onAuthStateChanged(function (user) {
+          if (settled) return;
+          settled = true;
+          unsub();
+          if (user) {
+            // An interpreter signed in on this device already. Keep that
+            // session — replacing it with an anonymous one would silently log
+            // them out of the dashboard.
+            resolve(user.uid);
+            return;
+          }
+          auth
+            .signInAnonymously()
+            .then(function (cred) {
+              resolve(cred.user.uid);
+            })
+            .catch(reject);
         });
-        auth.signInAnonymously().catch(reject);
       } catch (err) {
         reject(err);
       }
     });
+  }
+
+  // Resolves with the uid of an already-signed-in user, or null if nobody is
+  // signed in on this device. Never signs anyone in, so the interpreter
+  // dashboard can decide whether to show its login form.
+  function waitForExistingUser() {
+    return new Promise(function (resolve) {
+      try {
+        if (typeof firebase.auth !== "function") {
+          resolve(null);
+          return;
+        }
+        var auth = firebase.auth();
+        var settled = false;
+        var unsub = auth.onAuthStateChanged(function (user) {
+          if (settled) return;
+          settled = true;
+          unsub();
+          resolve(user ? user.uid : null);
+        });
+      } catch (err) {
+        console.error("VRS: waitForExistingUser failed", err);
+        resolve(null);
+      }
+    });
+  }
+
+  // Signs an interpreter in with a real account. Rejects with the Firebase
+  // error so the caller can show a specific message.
+  function signInWithEmail(email, password) {
+    try {
+      return firebase
+        .auth()
+        .signInWithEmailAndPassword(String(email).trim(), password)
+        .then(function (cred) {
+          // Later calls to ready() must resolve against the new identity, not
+          // the null that waitForExistingUser() settled on at page load.
+          authPromise = Promise.resolve(cred.user.uid);
+          return cred.user;
+        });
+    } catch (err) {
+      return Promise.reject(err);
+    }
+  }
+
+  function signOutUser() {
+    try {
+      return firebase.auth().signOut();
+    } catch (err) {
+      return Promise.reject(err);
+    }
+  }
+
+  function currentAuthUser() {
+    try {
+      return firebase.auth().currentUser || null;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function currentUid() {
+    var u = currentAuthUser();
+    return u ? u.uid : null;
+  }
+
+  // True when the signed-in identity is a real email/password account rather
+  // than an anonymous one. The database rules enforce the same distinction.
+  function isInterpreterAccount() {
+    var u = currentAuthUser();
+    if (!u) return false;
+    return u.isAnonymous === false;
+  }
+
+  // ---- Interpreter profiles -------------------------------------------------
+  // rules: interpreters/$uid is readable by any signed-in user (so a caller can
+  // be shown who they are connected to) but writable only by that interpreter.
+
+  function getInterpreterProfile(uid) {
+    return ref("interpreters/" + uid)
+      .once("value")
+      .then(function (snap) {
+        return snap.val();
+      });
+  }
+
+  function saveInterpreterProfile(uid, profile) {
+    var payload = {
+      displayName: String((profile && profile.displayName) || "").slice(0, 60),
+      title: String((profile && profile.title) || "").slice(0, 60),
+      lastSeenAt: nowTs()
+    };
+    if (profile && profile.createdAt) payload.createdAt = profile.createdAt;
+    else payload.createdAt = nowTs();
+    return ref("interpreters/" + uid).update(payload);
+  }
+
+  function touchInterpreter(uid) {
+    return ref("interpreters/" + uid)
+      .update({ lastSeenAt: nowTs() })
+      .catch(function (err) {
+        console.error("VRS: touchInterpreter failed", err);
+      });
   }
 
   // Resolves once anonymous sign-in has completed. Every code path that touches
@@ -633,6 +755,56 @@ var VRS = (function () {
     return { start: start, stop: stop, peers: peers };
   }
 
+  // ---- Service worker / PWA install ----------------------------------------
+
+  // Registers the service worker so the app can be installed to an iPhone or
+  // Android home screen and open offline. Separate from push on purpose:
+  // subscribeToPush() also registers sw.js, but only once a push endpoint has
+  // been configured, so relying on that alone left the app uninstallable.
+  // Calling register() twice with the same URL is a no-op, so both paths can
+  // run safely.
+  //
+  // Never rejects: a failed registration must not stop a call from starting.
+  function registerServiceWorker() {
+    try {
+      if (!("serviceWorker" in navigator)) return Promise.resolve(null);
+      // file:// has no secure context, so registration always throws there.
+      if (location.protocol !== "https:" && location.hostname !== "localhost") {
+        return Promise.resolve(null);
+      }
+      return navigator.serviceWorker.register("sw.js").catch(function (err) {
+        console.error("VRS: service worker registration failed", err);
+        return null;
+      });
+    } catch (err) {
+      console.error("VRS: registerServiceWorker failed", err);
+      return Promise.resolve(null);
+    }
+  }
+
+  // True when running as an installed home-screen app rather than in a browser
+  // tab. iOS exposes navigator.standalone; everyone else uses the media query.
+  function isInstalledApp() {
+    try {
+      if (navigator.standalone === true) return true;
+      return !!(window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+    } catch (err) {
+      return false;
+    }
+  }
+
+  // True for iPhone/iPad, including iPadOS 13+ which reports itself as a Mac
+  // with a touch screen.
+  function isIOS() {
+    try {
+      var ua = navigator.userAgent || "";
+      if (/iPad|iPhone|iPod/.test(ua)) return true;
+      return ua.indexOf("Macintosh") !== -1 && navigator.maxTouchPoints > 1;
+    } catch (err) {
+      return false;
+    }
+  }
+
   // ---- Web Push (background alerts for interpreters) ------------------------
   // Entirely separate from Firebase: subscriptions live in Cloudflare KV via
   // the Worker at VRS_PUSH_ENDPOINT, and the Worker holds the VAPID private
@@ -753,6 +925,14 @@ var VRS = (function () {
   return {
     init: init,
     ready: ready,
+    signInWithEmail: signInWithEmail,
+    signOutUser: signOutUser,
+    currentAuthUser: currentAuthUser,
+    currentUid: currentUid,
+    isInterpreterAccount: isInterpreterAccount,
+    getInterpreterProfile: getInterpreterProfile,
+    saveInterpreterProfile: saveInterpreterProfile,
+    touchInterpreter: touchInterpreter,
     isFirebaseConfigured: isFirebaseConfigured,
     showSetupBanner: showSetupBanner,
     nowTs: nowTs,
@@ -777,6 +957,9 @@ var VRS = (function () {
     isStale: isStale,
     createMesh: createMesh,
     iceServerConfig: iceServerConfig,
+    registerServiceWorker: registerServiceWorker,
+    isInstalledApp: isInstalledApp,
+    isIOS: isIOS,
     pushConfigured: pushConfigured,
     subscribeToPush: subscribeToPush,
     unsubscribeFromPush: unsubscribeFromPush,

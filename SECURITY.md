@@ -50,26 +50,39 @@ Then reload the app and place a test call to confirm everything still connects.
 - **Room history can't be rewritten.** `createdAt` is immutable once set.
 - **Room IDs must be exactly 4 digits**, so no arbitrary paths can be created.
 
-## What the interpreter gate protects
+## What interpreter sign-in protects
 
-`interpreter.html` is behind an access phrase, because whoever opens that
+`interpreter.html` is behind a real account, because whoever opens that
 dashboard receives live calls from deaf callers. Without it, anyone with the
 link could intercept those calls.
 
-- **The access phrase is deliberately not written down in this repository.**
-  This repo is public, so publishing the phrase here would defeat the gate.
-  It is shared directly with interpreters instead.
-- Only the SHA-256 hash is stored in the code — the phrase itself never appears.
-- Three wrong attempts triggers a 60-second lockout.
-- Unlocking lasts for the browser session; closing the tab re-locks it.
+This replaced a single shared access phrase. The phrase had two problems: it
+could not tell one interpreter from another, and anyone who learned it could
+read the queue of waiting callers.
 
-**To change the phrase**, compute a new hash and replace `VRS_GATE_HASH` in
-`interpreter.html`. The phrase is lowercased and trimmed before hashing, so the
-hash must be computed the same way:
+- **Interpreters sign in with Firebase email/password accounts**, created by
+  the administrator in the Firebase console under Authentication > Users.
+  There is no self-service signup, so an account cannot be created by a
+  visitor.
+- **The database rules enforce this, not just the UI.** Reading the call queue
+  requires `auth.token.firebase.sign_in_provider == 'password'`. An anonymous
+  visitor who opens the dashboard, or who scripts against the database
+  directly, cannot see who is waiting. Hiding the dashboard behind a form
+  alone would not have achieved that.
+- **Sign-in failures are reported identically** for a wrong password and an
+  unknown email, so the form cannot be used to discover which addresses have
+  accounts.
+- Sessions persist on the device until **Sign out** is used. On a shared
+  workstation, interpreters must sign out — signing out reloads the page to
+  tear down every listener and the media session.
+- **Callers remain anonymous by design.** A deaf student in distress must never
+  meet a signup wall, so callers get an anonymous session and an optional
+  first name kept only on their own device.
 
-```bash
-node -e "console.log(require('crypto').createHash('sha256').update('YOUR-NEW-PHRASE'.trim().toLowerCase()).digest('hex'))"
-```
+**To add an interpreter**, create the user in the Firebase console. They set
+their own display name and title the first time they sign in, which is what
+the caller sees while the call connects.
+
 
 ## Other protections already in place
 

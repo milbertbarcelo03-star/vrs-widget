@@ -3,6 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a1220">
+<!-- iOS home-screen app. iOS ignores the web manifest for these three,
+     so they must be declared as Apple-specific meta tags. -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="VRS Interp">
+<link rel="apple-touch-icon" href="icon-192.png">
 <link rel="manifest" href="manifest.json">
 <title>VRS Interpreter Dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -95,6 +103,7 @@
   .vrs-topbar{
     display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--sp-3);
     padding:var(--sp-4) var(--sp-5);border-bottom:1px solid var(--vrs-border);
+    padding-top:max(var(--sp-4), env(safe-area-inset-top));
     background:var(--vrs-panel);box-shadow:var(--shadow-sm);
   }
   .vrs-brand{ display:flex;align-items:center;gap:var(--sp-2); }
@@ -376,14 +385,15 @@
   }
   #vrsGateOverlay h2{ margin:0 0 var(--sp-2);font-size:var(--fs-lg); }
   #vrsGateOverlay p{ margin:0 0 var(--sp-5);color:var(--vrs-muted);font-size:var(--fs-sm);line-height:1.6; }
-  #vrsGateInput{
+  .vrs-gate-field{
     width:100%;min-height:44px;padding:14px 16px;font-size:var(--fs-md);border-radius:var(--radius-sm);
     border:1px solid var(--vrs-border);background:var(--vrs-panel-2);color:var(--vrs-text);
-    text-align:center;letter-spacing:.5px;font-family:var(--vrs-font-display);
+    text-align:left;font-family:var(--vrs-font-display);
     transition:border-color var(--dur-fast) var(--ease-standard);
   }
-  #vrsGateInput:focus{ outline:2px solid var(--vrs-purple);outline-offset:1px;border-color:var(--vrs-purple); }
-  #vrsGateBtn{
+  .vrs-gate-field:focus{ outline:2px solid var(--vrs-purple);outline-offset:1px;border-color:var(--vrs-purple); }
+  .vrs-gate-field + .vrs-gate-field{ margin-top:var(--sp-3); }
+  .vrs-gate-btn{
     width:100%;margin-top:var(--sp-4);padding:14px 16px;font-size:var(--fs-base);font-weight:700;
     min-height:44px;font-family:var(--vrs-font-display);
     border:none;border-radius:var(--radius-sm);cursor:pointer;color:#fff;
@@ -391,9 +401,21 @@
     transition:box-shadow var(--dur-fast) var(--ease-standard), transform var(--dur-fast) var(--ease-standard);
     background:linear-gradient(135deg,var(--vrs-purple),var(--vrs-purple-dark));
   }
-  #vrsGateBtn:active{ transform:scale(.98); }
-  #vrsGateBtn:disabled{ opacity:.5;cursor:not-allowed; }
-  #vrsGateError{ margin-top:var(--sp-4);min-height:20px;color:var(--vrs-danger);font-size:var(--fs-sm);font-weight:600; }
+  .vrs-gate-btn:active{ transform:scale(.98); }
+  .vrs-gate-btn:disabled{ opacity:.5;cursor:not-allowed; }
+  .vrs-room-tag{
+    font-size:var(--fs-2xs);color:var(--vrs-muted);font-weight:600;
+    background:var(--vrs-panel-2);border:1px solid var(--vrs-border);
+    border-radius:var(--radius-sm);padding:1px 6px;margin-left:var(--sp-2);
+  }
+  .vrs-gate-error{ margin-top:var(--sp-4);min-height:20px;color:var(--vrs-danger);font-size:var(--fs-sm);font-weight:600; }
+  #vrsGateOverlay .vrs-gate-card[hidden]{ display:none; }
+  #interpreterNameText{ font-size:var(--fs-sm);color:var(--vrs-text);font-weight:700;font-family:var(--vrs-font-display); }
+  #btnSignOut{
+    background:none;border:none;color:var(--vrs-muted);font-size:var(--fs-xs);
+    text-decoration:underline;cursor:pointer;padding:var(--sp-1) 0;min-height:32px;
+  }
+  #btnSignOut:hover{ color:var(--vrs-text); }
 </style>
 </head>
 <body>
@@ -409,7 +431,9 @@
       </span>
     </div>
     <div>
+      <div id="interpreterNameText"></div>
       <div id="interpreterIdText"></div>
+      <button type="button" id="btnSignOut" hidden>Sign out</button>
       <div class="vrs-toggle-row">
         <span id="onlineStatusText" class="vrs-status-offline">Offline</span>
         <div id="onlineSwitch" class="vrs-switch" role="switch" aria-checked="false" tabindex="0" aria-label="Toggle online status">
@@ -475,15 +499,30 @@
 </div>
 
 <div id="vrsGateOverlay">
-  <div class="vrs-gate-card">
+  <div class="vrs-gate-card" id="vrsSignInCard">
     <div class="vrs-emoji-big" aria-hidden="true">🔒</div>
-    <h2>Interpreter Access</h2>
-    <p>This dashboard receives live calls from deaf callers. Enter the interpreter
-       access phrase to continue.</p>
-    <input id="vrsGateInput" type="password" placeholder="Access phrase"
-           autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
-    <button type="button" id="vrsGateBtn">Unlock Dashboard</button>
-    <div id="vrsGateError" role="alert"></div>
+    <h2>Interpreter Sign In</h2>
+    <p>This dashboard receives live calls from deaf callers. Sign in with your
+       interpreter account.</p>
+    <input id="vrsGateEmail" class="vrs-gate-field" type="email" placeholder="Email"
+           autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false">
+    <input id="vrsGateInput" class="vrs-gate-field" type="password" placeholder="Password"
+           autocomplete="current-password" autocapitalize="none" autocorrect="off" spellcheck="false">
+    <button type="button" id="vrsGateBtn" class="vrs-gate-btn">Sign In</button>
+    <div id="vrsGateError" class="vrs-gate-error" role="alert"></div>
+  </div>
+
+  <div class="vrs-gate-card" id="vrsProfileCard" hidden>
+    <div class="vrs-emoji-big" aria-hidden="true">👋</div>
+    <h2>Your details</h2>
+    <p>Callers see this while the call connects, so they know who they have
+       reached instead of just a room number.</p>
+    <input id="vrsProfileName" class="vrs-gate-field" type="text" placeholder="Full name"
+           autocomplete="name" autocapitalize="words" autocorrect="off" spellcheck="false" maxlength="60">
+    <input id="vrsProfileTitle" class="vrs-gate-field" type="text" placeholder="Title (e.g. ASL Interpreter)"
+           autocomplete="off" autocapitalize="words" autocorrect="off" spellcheck="false" maxlength="60">
+    <button type="button" id="vrsProfileSave" class="vrs-gate-btn">Save &amp; Continue</button>
+    <div id="vrsProfileError" class="vrs-gate-error" role="alert"></div>
   </div>
 </div>
 
@@ -575,7 +614,7 @@ try {
 
   // ---- Firebase init ----
   function initFirebase() {
-    firebaseReady = VRS.init();
+    firebaseReady = VRS.init({ autoAnonymous: false });
     if (!firebaseReady) {
       VRS.showSetupBanner(document.getElementById('vrs-banner-host'));
       onlineSwitch.style.pointerEvents = 'none';
@@ -743,8 +782,14 @@ try {
     var roomRow = document.createElement('div');
     roomRow.className = 'vrs-queue-item-room';
     var roomLabel = document.createElement('span');
-    roomLabel.textContent = 'Room ' + (q.roomId || '----');
+    roomLabel.textContent = callerLabel(q);
     roomRow.appendChild(roomLabel);
+    if (q.callerName) {
+      var roomTag = document.createElement('span');
+      roomTag.className = 'vrs-room-tag';
+      roomTag.textContent = 'Room ' + (q.roomId || '----');
+      roomRow.appendChild(roomTag);
+    }
     if (q.hasCamera === false) {
       var camFlag = document.createElement('span');
       camFlag.className = 'vrs-cam-flag';
@@ -774,6 +819,13 @@ try {
     }
 
     return item;
+  }
+
+  // Callers are optional-name, so this is the single place that decides what
+  // an interpreter sees for a given queue entry.
+  function callerLabel(q) {
+    if (q && q.callerName) return q.callerName;
+    return 'Room ' + ((q && q.roomId) || '----');
   }
 
   function renderQueueList() {
@@ -883,7 +935,7 @@ try {
     title.textContent = 'Deaf caller waiting';
     var sub = document.createElement('div');
     sub.className = 'vrs-toast-sub';
-    sub.textContent = 'Room ' + (primary.roomId || '----') + ' — ' + formatWaitTime(primary.createdAt) +
+    sub.textContent = callerLabel(primary) + ' — ' + formatWaitTime(primary.createdAt) +
       (primary.hasCamera === false ? ' · no camera' : '');
     body.appendChild(title);
     body.appendChild(sub);
@@ -1011,7 +1063,9 @@ try {
 
   function showIncomingCall(queueEntry) {
     activeIncomingRoomId = queueEntry.roomId;
-    incomingCallInfo.textContent = 'Room ' + queueEntry.roomId + (queueEntry.hasCamera === false ? ' — caller has no camera' : '');
+    incomingCallInfo.textContent = callerLabel(queueEntry) +
+      (queueEntry.callerName ? ' · Room ' + queueEntry.roomId : '') +
+      (queueEntry.hasCamera === false ? ' — caller has no camera' : '');
     incomingCallOverlay.classList.add('vrs-visible', 'vrs-flash');
     startAlerting(queueEntry.roomId);
   }
@@ -1042,7 +1096,24 @@ try {
 
   function joinRoomAsInterpreter(targetRoomId) {
     roomId = targetRoomId;
-    VRS.updateRoom(roomId, { status: 'active', interpreterId: myId });
+    var roomPatch = { status: 'active', interpreterId: myId };
+    if (interpreterProfile && interpreterProfile.displayName) {
+      roomPatch.interpreterName = interpreterProfile.displayName +
+        (interpreterProfile.title ? ' \u00b7 ' + interpreterProfile.title : '');
+    }
+    // Without a fallback here an old rule set rejects the whole patch, the room
+    // never flips to 'active', and the caller rings forever.
+    VRS.updateRoom(roomId, roomPatch).catch(function (err) {
+      if (!roomPatch.interpreterName) {
+        console.error('VRS: could not mark room active', err);
+        return null;
+      }
+      console.error('VRS: room update rejected with interpreterName, retrying without', err);
+      delete roomPatch.interpreterName;
+      return VRS.updateRoom(roomId, roomPatch).catch(function (err2) {
+        console.error('VRS: could not mark room active', err2);
+      });
+    });
     VRS.updateQueueEntry(roomId, { status: 'accepted' });
     VRS.addParticipant(roomId, myId, { role: myRole });
     ensureCameraThenEnterCall();
@@ -1310,102 +1381,233 @@ try {
   }
 
   // ---- Interpreter access gate ----
-  // SHA-256 of the access phrase, computed over phrase.trim().toLowerCase().
-  // hashPhrase() below MUST apply exactly the same transformations in the same
-  // order, or the digests will never match.
-  var VRS_GATE_HASH = 'e0bcbabdc66a9ed9dcc590d435f50310811899935c9e3d314daa0132f625ec6c';
-  var VRS_GATE_MAX_ATTEMPTS = 3;
-  var VRS_GATE_LOCKOUT_MS = 60000;
-  var gateAttempts = 0;
-  var gateLockedUntil = 0;
+  // ---- Interpreter authentication -----------------------------------------
+  // Real Firebase email/password accounts, created by the administrator in the
+  // Firebase console. This replaced a single shared passphrase: the database
+  // rules gate the call queue on sign_in_provider == 'password', so an
+  // anonymous visitor cannot read who is waiting even if they open this page.
+
+  var interpreterProfile = null;
 
   function gateEls() {
     return {
       overlay: document.getElementById('vrsGateOverlay'),
+      signInCard: document.getElementById('vrsSignInCard'),
+      email: document.getElementById('vrsGateEmail'),
       input: document.getElementById('vrsGateInput'),
       btn: document.getElementById('vrsGateBtn'),
-      err: document.getElementById('vrsGateError')
+      err: document.getElementById('vrsGateError'),
+      profileCard: document.getElementById('vrsProfileCard'),
+      profileName: document.getElementById('vrsProfileName'),
+      profileTitle: document.getElementById('vrsProfileTitle'),
+      profileSave: document.getElementById('vrsProfileSave'),
+      profileErr: document.getElementById('vrsProfileError')
     };
   }
 
-  function isGateUnlocked() {
-    try {
-      return sessionStorage.getItem('vrsInterpreterUnlocked') === '1';
-    } catch (err) {
-      return false; // private browsing with storage disabled
+  // Firebase auth error codes are not presentable, and several of them mean
+  // the same thing to a user. Collapse them into plain language.
+  function authErrorMessage(err) {
+    var code = (err && err.code) || '';
+    if (code === 'auth/invalid-email') return 'That email address is not valid.';
+    if (code === 'auth/user-disabled') return 'This account has been disabled. Contact the administrator.';
+    if (code === 'auth/too-many-requests') return 'Too many attempts. Wait a minute and try again.';
+    if (code === 'auth/network-request-failed') return 'No connection. Check your network and try again.';
+    if (code === 'auth/operation-not-allowed') {
+      return 'Email sign-in is not enabled on this Firebase project yet.';
     }
+    // invalid-credential / wrong-password / user-not-found are deliberately
+    // reported identically so the form does not confirm which emails exist.
+    return 'Incorrect email or password.';
   }
 
-  function hashPhrase(text) {
-    var normalized = String(text).trim().toLowerCase();
-    var bytes = new TextEncoder().encode(normalized);
-    return crypto.subtle.digest('SHA-256', bytes).then(function (buf) {
-      return Array.prototype.map.call(new Uint8Array(buf), function (b) {
-        return ('00' + b.toString(16)).slice(-2);
-      }).join('');
-    });
+  function showSignIn() {
+    var els = gateEls();
+    if (els.overlay) els.overlay.classList.remove('vrs-gate-hidden');
+    if (els.signInCard) els.signInCard.hidden = false;
+    if (els.profileCard) els.profileCard.hidden = true;
+    try { els.email.focus(); } catch (err) { /* ignore */ }
+  }
+
+  function showProfileSetup() {
+    var els = gateEls();
+    if (els.overlay) els.overlay.classList.remove('vrs-gate-hidden');
+    if (els.signInCard) els.signInCard.hidden = true;
+    if (els.profileCard) els.profileCard.hidden = false;
+    try { els.profileName.focus(); } catch (err) { /* ignore */ }
   }
 
   function unlockDashboard() {
     var els = gateEls();
     if (els.overlay) els.overlay.classList.add('vrs-gate-hidden');
-    initFirebase();
+
+    var nameEl = document.getElementById('interpreterNameText');
+    var signOutEl = document.getElementById('btnSignOut');
+    if (nameEl && interpreterProfile) {
+      nameEl.textContent = interpreterProfile.displayName +
+        (interpreterProfile.title ? ' \u00b7 ' + interpreterProfile.title : '');
+    }
+    if (signOutEl) signOutEl.hidden = false;
+
+    var uid = VRS.currentUid();
+    if (uid) VRS.touchInterpreter(uid);
+
     wireUpUI();
   }
 
-  function onGateSubmit() {
+  // Runs once an interpreter account is signed in. Loads their profile, or
+  // asks for it the first time they use the dashboard.
+  function afterSignedIn() {
+    var uid = VRS.currentUid();
+    if (!uid) {
+      showSignIn();
+      return;
+    }
+    VRS.getInterpreterProfile(uid)
+      .then(function (profile) {
+        if (profile && profile.displayName) {
+          interpreterProfile = profile;
+          unlockDashboard();
+          return;
+        }
+        showProfileSetup();
+      })
+      .catch(function (err) {
+        console.error('VRS: could not load interpreter profile', err);
+        // A profile read failure must not lock a working interpreter out of
+        // the queue - carry on without a display name.
+        interpreterProfile = null;
+        unlockDashboard();
+      });
+  }
+
+  function onSignInSubmit() {
     var els = gateEls();
-    var now = Date.now();
-    if (now < gateLockedUntil) {
-      els.err.textContent = 'Too many attempts. Wait ' +
-        Math.ceil((gateLockedUntil - now) / 1000) + ' more seconds.';
+    var email = (els.email.value || '').trim();
+    var password = els.input.value || '';
+    if (!email || !password) {
+      els.err.textContent = 'Enter both your email and password.';
       return;
     }
     els.btn.disabled = true;
-    hashPhrase(els.input.value).then(function (digest) {
-      if (digest === VRS_GATE_HASH) {
-        try {
-          sessionStorage.setItem('vrsInterpreterUnlocked', '1');
-        } catch (err) { /* storage unavailable — unlock for this page load only */ }
+    els.err.textContent = '';
+    VRS.signInWithEmail(email, password)
+      .then(function () {
+        els.btn.disabled = false;
+        els.input.value = '';
+        afterSignedIn();
+      })
+      .catch(function (err) {
+        console.error('VRS: interpreter sign-in failed', err);
+        els.btn.disabled = false;
+        els.input.value = '';
+        els.err.textContent = authErrorMessage(err);
+      });
+  }
+
+  function onProfileSave() {
+    var els = gateEls();
+    var uid = VRS.currentUid();
+    var displayName = (els.profileName.value || '').trim();
+    if (!displayName) {
+      els.profileErr.textContent = 'Please enter the name callers should see.';
+      return;
+    }
+    if (!uid) {
+      els.profileErr.textContent = 'Your session expired. Please sign in again.';
+      showSignIn();
+      return;
+    }
+    els.profileSave.disabled = true;
+    els.profileErr.textContent = '';
+    var profile = { displayName: displayName, title: (els.profileTitle.value || '').trim() };
+    VRS.saveInterpreterProfile(uid, profile)
+      .then(function () {
+        els.profileSave.disabled = false;
+        interpreterProfile = profile;
         unlockDashboard();
-        return;
-      }
-      gateAttempts++;
-      els.input.value = '';
-      els.btn.disabled = false;
-      if (gateAttempts >= VRS_GATE_MAX_ATTEMPTS) {
-        gateAttempts = 0;
-        gateLockedUntil = Date.now() + VRS_GATE_LOCKOUT_MS;
-        els.err.textContent = 'Too many attempts. Locked for 60 seconds.';
-      } else {
-        els.err.textContent = 'Incorrect access phrase.';
-      }
-    }).catch(function (err) {
-      console.error('VRS: gate hashing failed', err);
-      els.err.textContent = 'Could not verify the phrase in this browser.';
-      els.btn.disabled = false;
-    });
+      })
+      .catch(function (err) {
+        // Most likely the interpreters/ node is not in the deployed rules yet.
+        // Let them through to the dashboard anyway: an interpreter who cannot
+        // save a display name must still be able to answer calls.
+        console.error('VRS: saving interpreter profile failed', err);
+        els.profileSave.disabled = false;
+        interpreterProfile = profile;
+        unlockDashboard();
+      });
+  }
+
+  function onSignOut() {
+    VRS.signOutUser()
+      .then(function () {
+        // A full reload is the simplest way to tear down every open listener,
+        // the mesh and the online toggle without leaking state into the next
+        // interpreter session on a shared workstation.
+        location.reload();
+      })
+      .catch(function (err) {
+        console.error('VRS: sign-out failed', err);
+      });
   }
 
   function wireUpGate() {
     var els = gateEls();
     if (!els.overlay) return;
-    els.btn.addEventListener('click', onGateSubmit);
-    els.input.addEventListener('keydown', function (evt) {
-      if (evt.key === 'Enter') onGateSubmit();
+    els.btn.addEventListener('click', onSignInSubmit);
+    els.email.addEventListener('keydown', function (evt) {
+      if (evt.key === 'Enter') els.input.focus();
     });
-    try { els.input.focus(); } catch (err) { /* ignore */ }
+    els.input.addEventListener('keydown', function (evt) {
+      if (evt.key === 'Enter') onSignInSubmit();
+    });
+    els.profileSave.addEventListener('click', onProfileSave);
+    els.profileTitle.addEventListener('keydown', function (evt) {
+      if (evt.key === 'Enter') onProfileSave();
+    });
+    var signOutEl = document.getElementById('btnSignOut');
+    if (signOutEl) signOutEl.addEventListener('click', onSignOut);
   }
 
   function boot() {
     wireUpGate();
-    if (isGateUnlocked()) unlockDashboard();
+    // Firebase must be initialised before sign-in, so this no longer waits for
+    // the gate to open. autoAnonymous:false keeps init() from creating an
+    // anonymous session that the queue rules would then reject.
+    initFirebase();
+    if (!firebaseReady) return;
+
+    VRS.ready()
+      .then(function (uid) {
+        if (uid && VRS.isInterpreterAccount()) {
+          afterSignedIn();
+          return;
+        }
+        // Nobody signed in, or a leftover anonymous session from call.html.
+        showSignIn();
+      })
+      .catch(function (err) {
+        console.error('VRS: auth state check failed', err);
+        showSignIn();
+      });
+  }
+
+  function onReady() {
+    boot();
+    // Registered unconditionally so the dashboard can be installed to a home
+    // screen. subscribeToPush() also registers sw.js, but only once a push
+    // endpoint exists — which it does not yet.
+    try {
+      VRS.registerServiceWorker();
+    } catch (err) {
+      console.error('VRS: service worker registration failed', err);
+    }
   }
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', boot);
+    document.addEventListener('DOMContentLoaded', onReady);
   } else {
-    boot();
+    onReady();
   }
 
 } catch (fatalErr) {

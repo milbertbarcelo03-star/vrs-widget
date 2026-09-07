@@ -8,7 +8,9 @@
 
         "interpreters": {
           "$uid": {
-            "//": "Profiles are readable by callers so the app can show who they are connected to, but only the signed-in interpreter can write their own.",
+            // Profiles are readable by any signed-in user so a caller can be
+            // shown who they are connected to, but only the interpreter
+            // themselves can write their own profile.
             ".read": "auth != null",
             ".write": "auth != null && auth.uid == $uid",
 
@@ -21,7 +23,9 @@
         },
 
         "queue": {
-          "//": "Only real interpreter accounts (email/password) may see who is waiting. Anonymous callers can add themselves but cannot read the queue.",
+          // Only real interpreter accounts (email/password) may see who is
+          // waiting. Anonymous callers can add themselves to the queue but
+          // cannot read it.
           ".read": "auth != null && auth.token.firebase.sign_in_provider == 'password'",
 
           "$roomId": {

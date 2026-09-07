@@ -68,7 +68,8 @@ Browser C (third party)  --+
 | `interpreter.html` | Interpreter dashboard: access gate, online toggle, waiting room, incoming-call overlay, in-call UI. |
 | `shared.js` | Firebase config and init, anonymous auth, all signalling helpers, the WebRTC mesh manager, ICE server config. **The heart of the app.** |
 | `sw.js` | Service worker for web push (payload-less push, generic notification). |
-| `manifest.json` | PWA manifest. Also required for iOS web push. |
+| `manifest.json` | PWA manifest for the **interpreter** app. Also required for iOS web push. |
+| `manifest-call.json` | PWA manifest for the **caller** app. Separate file so the two installs get their own name, icon and start URL. |
 | `worker/` | Cloudflare Worker that signs and sends web push via VAPID. **Not yet deployed.** |
 | `firebase-rules.json` | Database security rules. **Source of truth, but must be pasted into the Firebase console by hand.** |
 | `interpreter/`, `call/` | Redirect stubs providing clean URLs. The real files stay flat so there is no duplicated copy to drift out of sync. |
@@ -91,28 +92,44 @@ Browser C (third party)  --+
 - SHA-256 access gate on the interpreter dashboard
 - Design system: Outfit display font, 4px spacing scale, layered shadows
 
+- **Installable as an app** on iPhone and Android home screens (PWA). Both
+  pages register `sw.js`, which precaches the same-origin app shell so the
+  installed app opens on a flaky connection. Cross-origin traffic (Firebase,
+  the gstatic SDK, Google Fonts) is deliberately never intercepted.
+- **Identity.** Callers give an optional first name, remembered on the device.
+  Interpreters sign in with real Firebase email/password accounts and set a
+  display name and title, which the caller sees while the call connects.
+
 ### Built but NOT deployed
 - **Web push** (`sw.js`, `manifest.json`, `worker/`). Completely inert until
   `VRS_PUSH_ENDPOINT` in `shared.js` points at a deployed Cloudflare Worker.
   Follow `PUSH-SETUP.md`. Until then the interpreter must keep the tab open.
 
-### In progress, NOT finished
-**Identity / login.** Agreed approach:
+### Identity — code complete, BLOCKED on a console step
 
-1. Caller enters a first name (no account, remembered on the device) so the
+The UI and auth logic in `call.html` and `interpreter.html` are finished:
+
+1. The caller enters a first name (no account, remembered on the device) so the
    interpreter sees a person rather than "Room 4468".
-2. Interpreters get **real Firebase email/password accounts**, replacing the
-   shared passphrase gate. Their profile (name, title) is shown to the caller.
+2. Interpreters sign in with **real Firebase email/password accounts**,
+   replacing the shared passphrase gate. Their name and title are shown to the
+   caller. `VRS.init({ autoAnonymous: false })` on the dashboard keeps the
+   anonymous sign-in from stealing the identity the queue rules check.
 3. Student accounts deliberately skipped: a deaf student in distress must never
    hit a signup wall.
 
-- **Done:** `firebase-rules.json` is already updated and pushed for this
-  (interpreter profile nodes, `callerName` / `interpreterName` fields, and queue
-  reads restricted to `sign_in_provider == 'password'`).
-- **Not done:** all of the UI and auth logic in `call.html` and
-  `interpreter.html`.
+**It cannot work until the console steps in section 5 are done.** Verified
+against the live database on 2026-09-07: Email/Password sign-in is **not
+enabled** (signing in returns `auth/operation-not-allowed`), and the deployed
+rules are still the old set — a queue write carrying `callerName` is rejected,
+while the same write without it succeeds.
 
----
+Because of that, every identity write has a fallback that retries without the
+new field (`createRoom`, `pushToQueue`, and the interpreter's `updateRoom`).
+A name is a nicety; placing a call is not, and an interpreter accepting a call
+must never leave the caller ringing forever. **Do not remove those fallbacks
+just because the rules look correct in the repo** — the repo is not what the
+database enforces.
 
 ## 5. Manual steps still outstanding
 
@@ -125,6 +142,29 @@ Browser C (third party)  --+
    Realtime Database > Rules > Publish. Publishing before steps 1 and 2 makes
    the queue unreadable and the dashboard silently stops receiving calls.
 4. Optional: deploy the Cloudflare Worker per `PUSH-SETUP.md` to enable push.
+
+Until step 3 is done, the app still works, but callers' names are silently
+dropped and interpreters cannot sign in at all.
+
+### Installing on an iPhone
+
+iOS cannot be given a native build from Windows, and does not need one here.
+Open the caller URL in **Safari** (not Chrome), then Share > **Add to Home
+Screen**. `call.html` shows those steps on screen automatically on iOS, since
+Safari offers no install prompt of its own and the users are deaf.
+
+Notes that cost real debugging time if forgotten:
+
+- It must be **Safari**. Other iOS browsers cannot install a PWA.
+- The installed app has **its own storage and its own permissions**. Camera and
+  microphone must be granted again inside it, and a name remembered in Safari
+  does not carry over.
+- Web push on iOS requires **iOS 16.4+ and the app installed to the home
+  screen**. It will never work in a plain Safari tab.
+- `apple-mobile-web-app-status-bar-style` is `black-translucent`, so the page
+  runs under the status bar. The top safe-area inset is honoured in
+  `.vrs-screen` (caller) and `.vrs-topbar` (interpreter) — removing those
+  paddings puts the header under the notch.
 
 ---
 
@@ -212,10 +252,11 @@ browsers). Two tabs on one machine cannot both hold the camera.
 Nothing sensitive is stored in this repository. All of it is delivered
 out-of-band:
 
-- **Interpreter access phrase:** held by Milbert. Only the hash appears in
-  `interpreter.html` as `VRS_GATE_HASH`. To change it, recompute SHA-256 over
-  `phrase.trim().toLowerCase()` and replace that constant. The transformation
-  must match exactly or the comparison silently never succeeds.
+- **Interpreter accounts:** real Firebase email/password users, created by
+  hand in the Firebase console under Authentication > Users. There is no
+  self-service signup and no shared phrase any more, so nothing about
+  interpreter access lives in this repository. Passwords are delivered to
+  interpreters out-of-band.
 - **VAPID push keys:** `vapid-keys.local.txt` in the project folder, gitignored.
   The public key is embedded in `shared.js`; the private key belongs only in a
   Cloudflare Worker secret. While the Worker is undeployed, these can be
@@ -228,13 +269,13 @@ out-of-band:
 
 ## 11. Roadmap
 
-1. Finish the identity work (caller names plus interpreter accounts).
+1. **Do the Firebase console steps in section 5.** Everything in the identity
+   work is written and tested but inert until then. This is the blocker.
 2. Deploy the Cloudflare Worker so interpreters can close the tab.
-3. Install as a PWA. The manifest and service worker already exist, making this
-   the cheapest path to an app icon on the home screen for both iOS and Android.
+3. Production hardening: dedicated TURN servers, longer room identifiers, and
+   real interpreter credential verification.
 4. Only if App Store presence is genuinely required, wrap with Capacitor.
    Android is a one-time 25 USD fee and builds on Windows. iOS requires the
    99 USD per year Apple Developer Program **and a Mac**, or a cloud Mac build
-   service.
-5. Production hardening: dedicated TURN servers, longer room identifiers, and
-   real interpreter credential verification.
+   service. The PWA install already covers the iPhone home-screen case at no
+   cost, so this is worth doing only for store discoverability.

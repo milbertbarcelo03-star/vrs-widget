@@ -189,8 +189,8 @@ GitHub Pages will rebuild the site automatically — give it a minute or two.
 
 ## Step 10 — Turn it on as the interpreter
 
-1. Open the interpreter dashboard and unlock it with the access phrase, as
-   usual.
+1. Open the interpreter dashboard and sign in with your interpreter account,
+   as usual.
 2. You'll now see a new button in the top bar: **"🔔 Enable background
    alerts."** Click it.
 3. Your browser will ask permission to show notifications — click **Allow**.
