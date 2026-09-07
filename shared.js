@@ -42,7 +42,7 @@ var VRS_FIREBASE_CONFIG = {
 // Paste the Cloudflare Worker URL from PUSH-SETUP.md here, e.g.
 // "https://vrs-push.YOUR-SUBDOMAIN.workers.dev"
 var VRS_PUSH_ENDPOINT = "";
-var VRS_VAPID_PUBLIC_KEY = "BGA0lA1VmtZWDqsBAgm95Qk_oOnFt2LO2m_of29JnhmHMLRGnbtz813bNUoNYfvlBC7IFp3qJdg3vH3zd6T92K8";
+var VRS_VAPID_PUBLIC_KEY = "BFzZPcIXshnsZqC8ner-25wpy9KYEcUKPg6Uenc8PUVi1_dvzOygT8FEuIg6sE-QQoqXnwjl6E3bALG77-7HsFQ";
 
 /* ============================================================================
    Everything below this line is app plumbing — no need to edit it.
