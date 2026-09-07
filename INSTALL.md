@@ -99,8 +99,15 @@ The first time an interpreter signs in they enter a display name and title
 (for example "Ana Reyes · ASL Interpreter"). Callers see this while the call
 connects, so they know who they have reached.
 
-**Accounts are created by Milbert in the Firebase console — there is no
-self-service signup.** Contact him to add or remove an interpreter.
+**Interpreters create their own account** from the dashboard, with an email
+and password or with Google. A new account cannot receive calls until Milbert
+approves it, so a stranger cannot sign up and start answering calls from
+students. Ask him to approve a new interpreter.
+
+Anyone can report a problem from inside the app using **Report a problem** on
+either screen: a 1-5 rating, what kind of problem, and what happened. Reports
+record the room code and device automatically, so issues can be traced without
+having to reproduce them.
 
 ---
 

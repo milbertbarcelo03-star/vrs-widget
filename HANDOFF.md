@@ -97,8 +97,18 @@ Browser C (third party)  --+
   installed app opens on a flaky connection. Cross-origin traffic (Firebase,
   the gstatic SDK, Google Fonts) is deliberately never intercepted.
 - **Identity.** Callers give an optional first name, remembered on the device.
-  Interpreters sign in with real Firebase email/password accounts and set a
+  Interpreters have real accounts (email/password or Google SSO) and set a
   display name and title, which the caller sees while the call connects.
+- **Self-signup with admin approval.** Anyone can create an interpreter
+  account, but it cannot read the call queue until an admin approves it via
+  **Manage accounts**. See SECURITY.md for why open signup would otherwise be
+  dangerous, and for the cascading-rules trap in `interpreters/$uid`.
+- **Problem reports.** A rating and report form on both pages, built and
+  injected from `shared.js` so there is one implementation and the desktop and
+  home-screen apps inherit it. Readable in the dashboard under **View
+  reports**, with "Copy all as JSON".
+- **Windows desktop app** (`desktop/`). Electron wrapper around the deployed
+  dashboard URL. See section 12.
 
 ### Built but NOT deployed
 - **Web push** (`sw.js`, `manifest.json`, `worker/`). Completely inert until
@@ -135,13 +145,24 @@ database enforces.
 
 **Ordering matters. Doing these out of order breaks the app.**
 
+**All of these are DONE as of 2026-09-07** — kept here because they must be
+repeated for any new Firebase project.
+
 1. Firebase console, Build > Authentication > Sign-in method: enable
-   **Email/Password**. (Anonymous is already enabled.)
+   **Email/Password**, and **Google** for SSO. (Anonymous is already enabled.)
+   For Google, also add the deployed domain under Authentication > Settings >
+   **Authorized domains**, or SSO fails with `auth/unauthorized-domain`.
 2. Create at least one interpreter account under Authentication > Users.
 3. *Only then* paste the current `firebase-rules.json` into
    Realtime Database > Rules > Publish. Publishing before steps 1 and 2 makes
    the queue unreadable and the dashboard silently stops receiving calls.
-4. Optional: deploy the Cloudflare Worker per `PUSH-SETUP.md` to enable push.
+4. In Realtime Database > Data, create `admins/<your-uid>` = `true` (boolean,
+   not the string "true"), and set `interpreters/<your-uid>/approved` = `true`.
+   `admins` must be a **node containing uids**, not a bare boolean.
+   Do this **before** publishing rules that gate on approval, or you lock
+   yourself out of your own queue. The console bypasses rules, so it works
+   either way round — but the app does not.
+5. Optional: deploy the Cloudflare Worker per `PUSH-SETUP.md` to enable push.
 
 Until step 3 is done, the app still works, but callers' names are silently
 dropped and interpreters cannot sign in at all.
@@ -269,13 +290,48 @@ out-of-band:
 
 ## 11. Roadmap
 
-1. **Do the Firebase console steps in section 5.** Everything in the identity
-   work is written and tested but inert until then. This is the blocker.
-2. Deploy the Cloudflare Worker so interpreters can close the tab.
+1. Deploy the Cloudflare Worker so interpreters can close the tab.
+2. Confirm Google SSO works in the installed iOS home-screen app. iOS storage
+   partitioning can break redirect-based sign-in there; email/password is
+   unaffected, and `signInWithGoogle()` already falls back from popup to
+   redirect.
 3. Production hardening: dedicated TURN servers, longer room identifiers, and
    real interpreter credential verification.
-4. Only if App Store presence is genuinely required, wrap with Capacitor.
-   Android is a one-time 25 USD fee and builds on Windows. iOS requires the
-   99 USD per year Apple Developer Program **and a Mac**, or a cloud Mac build
-   service. The PWA install already covers the iPhone home-screen case at no
-   cost, so this is worth doing only for store discoverability.
+4. Android build via Capacitor. Node and JDK 17 are present; the Android SDK
+   is not. Buildable entirely on Windows.
+5. Only if App Store presence is genuinely required, wrap with Capacitor for
+   iOS. Needs a Mac and 99 USD/year. Note Apple rejects thin web wrappers
+   under Guideline 4.2, so it would need real native push and camera
+   integration. The PWA already covers the iPhone home-screen case for free.
+
+---
+
+## 12. Desktop app (`desktop/`)
+
+Electron wrapper for the interpreter dashboard, so a shift is not run in a
+browser tab that can be closed by accident.
+
+```bash
+cd desktop && npm install && npm start      # run
+npx electron-builder --win --x64            # build installers into desktop/dist
+```
+
+**It loads the deployed HTTPS URL, not local files.** `getUserMedia` and
+service workers both require a secure context and `file://` is not one, so
+bundling the pages would kill the camera and the service worker. The useful
+side effect is that a `git push` updates every installed copy — the desktop
+app and the installed phone apps all track the live site, so web changes need
+no rebuild. Only `main.js` changes require rebuilding the `.exe`.
+
+Gotchas already hit:
+
+- Electron denies camera, microphone and notifications **silently**. They are
+  granted explicitly in `main.js`, for our origin only.
+- The Google sign-in popup must be allowed through `setWindowOpenHandler`, and
+  the auth origins excluded from the `will-navigate` guard, or sign-in escapes
+  to the system browser and never returns.
+- `npm install` may leave `node_modules/electron/dist` empty even though the
+  zip downloaded. Extract the cached zip manually and write `path.txt`
+  containing `electron.exe`.
+- The build is unsigned, so SmartScreen warns on first run. A code-signing
+  certificate is roughly 200-400 USD/year.

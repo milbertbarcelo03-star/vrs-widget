@@ -52,36 +52,59 @@ Then reload the app and place a test call to confirm everything still connects.
 
 ## What interpreter sign-in protects
 
-`interpreter.html` is behind a real account, because whoever opens that
-dashboard receives live calls from deaf callers. Without it, anyone with the
-link could intercept those calls.
+`interpreter.html` is behind an account, because whoever opens that dashboard
+receives live calls from deaf callers. Without that, anyone with the link
+could intercept those calls.
 
-This replaced a single shared access phrase. The phrase had two problems: it
-could not tell one interpreter from another, and anyone who learned it could
-read the queue of waiting callers.
+This replaced a single shared access phrase, which could not tell one
+interpreter from another and let anyone who learned it read the queue of
+waiting callers.
 
-- **Interpreters sign in with Firebase email/password accounts**, created by
-  the administrator in the Firebase console under Authentication > Users.
-  There is no self-service signup, so an account cannot be created by a
-  visitor.
-- **The database rules enforce this, not just the UI.** Reading the call queue
-  requires `auth.token.firebase.sign_in_provider == 'password'`. An anonymous
-  visitor who opens the dashboard, or who scripts against the database
-  directly, cannot see who is waiting. Hiding the dashboard behind a form
-  alone would not have achieved that.
-- **Sign-in failures are reported identically** for a wrong password and an
-  unknown email, so the form cannot be used to discover which addresses have
-  accounts.
-- Sessions persist on the device until **Sign out** is used. On a shared
-  workstation, interpreters must sign out — signing out reloads the page to
-  tear down every listener and the media session.
-- **Callers remain anonymous by design.** A deaf student in distress must never
-  meet a signup wall, so callers get an anonymous session and an optional
-  first name kept only on their own device.
+### Anyone may sign up; nobody may answer calls unapproved
 
-**To add an interpreter**, create the user in the Firebase console. They set
-their own display name and title the first time they sign in, which is what
-the caller sees while the call connects.
+Interpreters create their own account (email/password, or Google SSO). A new
+account can sign in and set its display name, and **nothing else**. It cannot
+see the call queue or read problem reports until an admin approves it.
+
+Self-signup that granted immediate access would let a stranger start answering
+calls from deaf students, which is exactly what the old passphrase existed to
+prevent. The approval step is what makes open signup safe.
+
+- **The database rules are the enforcement point, not the UI.** Reading the
+  queue requires `interpreters/$uid/approved === true`. Hiding the dashboard
+  behind a form would not stop a scripted client; this does.
+- **Gated on approval, not on the sign-in provider.** That is what allows
+  Google SSO to work while keeping unapproved accounts inert.
+- **`approved` is admin-only**, and admin status lives at `admins/$uid`, which
+  has no `.write` rule at all — it can only be set from the Firebase console.
+  No client can grant itself either flag.
+
+### The cascading-rules trap
+
+`.write` is set **per field** on `interpreters/$uid`, never on the node itself.
+
+Realtime Database rules cascade downward, and a child rule can only *add*
+permission, never revoke it. A single `.write` on `$uid` — the obvious way to
+write it — would therefore also have granted write access to `approved`,
+letting any new signup approve itself. This is verified: an account attempting
+to set its own `approved` is denied.
+
+### Problem reports
+
+Reports are writable by anyone signed in, including anonymous callers, since
+callers are the people most likely to hit a problem. They are readable only by
+approved interpreters, because a report can describe a caller's situation.
+Report text is rendered with `textContent`, never `innerHTML`, so a report
+cannot inject markup into the dashboard.
+
+### Callers stay anonymous on purpose
+
+A deaf student in distress must never meet a signup wall. Callers get an
+anonymous session and an optional first name kept only on their own device.
+
+**To approve an interpreter**, sign in as an admin and use **Manage accounts**
+in the dashboard top bar. **To add an admin**, add their uid under `admins` in
+the Firebase console.
 
 
 ## Other protections already in place
