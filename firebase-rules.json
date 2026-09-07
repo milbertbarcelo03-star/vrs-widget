@@ -6,27 +6,76 @@
     "_vrsProto_mariana47": {
       "signalingRoot9x": {
 
-        "interpreters": {
+        "admins": {
+          // Written ONLY from the Firebase console. There is deliberately no
+          // .write rule here, so no client can ever grant itself admin.
           "$uid": {
-            // Profiles are readable by any signed-in user so a caller can be
-            // shown who they are connected to, but only the interpreter
-            // themselves can write their own profile.
-            ".read": "auth != null",
-            ".write": "auth != null && auth.uid == $uid",
+            ".read": "auth != null && auth.uid == $uid"
+          }
+        },
 
-            "displayName": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 60" },
-            "title":       { ".validate": "newData.isString() && newData.val().length <= 60" },
-            "createdAt":   { ".validate": "newData.isNumber()" },
-            "lastSeenAt":  { ".validate": "newData.isNumber()" },
+        "interpreters": {
+          // Any signed-in user may read profiles: callers are shown who they
+          // are connected to, and admins need to list pending accounts.
+          ".read": "auth != null",
+
+          "$uid": {
+            // NOTE: .write is set per-field below, never on $uid itself.
+            // Realtime Database rules cascade downward and a child rule can
+            // only ADD permission, never take it away. A single .write here
+            // would therefore also grant write access to "approved", letting
+            // any new signup approve itself and start taking calls from deaf
+            // students. Keep these separate.
+            "displayName": { ".write": "auth != null && (auth.uid == $uid || root.child('_vrsProto_mariana47/signalingRoot9x/admins/' + auth.uid).val() === true)", ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 60" },
+            "title":       { ".write": "auth != null && (auth.uid == $uid || root.child('_vrsProto_mariana47/signalingRoot9x/admins/' + auth.uid).val() === true)", ".validate": "newData.isString() && newData.val().length <= 60" },
+            "email":       { ".write": "auth != null && (auth.uid == $uid || root.child('_vrsProto_mariana47/signalingRoot9x/admins/' + auth.uid).val() === true)", ".validate": "newData.isString() && newData.val().length <= 120" },
+            "createdAt":   { ".write": "auth != null && (auth.uid == $uid || root.child('_vrsProto_mariana47/signalingRoot9x/admins/' + auth.uid).val() === true)", ".validate": "newData.isNumber()" },
+            "lastSeenAt":  { ".write": "auth != null && (auth.uid == $uid || root.child('_vrsProto_mariana47/signalingRoot9x/admins/' + auth.uid).val() === true)", ".validate": "newData.isNumber()" },
+
+            // Admin-only. Absent or false means "not approved", so a brand new
+            // account is inert until a human turns this on.
+            "approved":    { ".write": "auth != null && root.child('_vrsProto_mariana47/signalingRoot9x/admins/' + auth.uid).val() === true", ".validate": "newData.isBoolean()" },
+
             "$other":      { ".validate": false }
           }
         },
 
+        "feedback": {
+          // Anyone signed in may leave a report, including anonymous deaf
+          // callers - that is the whole point. Reading it back is limited to
+          // interpreter accounts, because a report can describe a caller's
+          // situation and must not be world-readable.
+          ".read": "auth != null && root.child('_vrsProto_mariana47/signalingRoot9x/interpreters/' + auth.uid + '/approved').val() === true",
+          ".indexOn": ["ts"],
+
+          "$entryId": {
+            // Create-only for ordinary users: the !data.exists() clause means
+            // nobody can edit or erase a report once filed. Interpreter
+            // accounts can still delete spam.
+            ".write": "auth != null && (!data.exists() || root.child('_vrsProto_mariana47/signalingRoot9x/interpreters/' + auth.uid + '/approved').val() === true)",
+            ".validate": "!newData.exists() || newData.hasChildren(['message', 'ts'])",
+
+            "rating":     { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 5" },
+            "category":   { ".validate": "newData.isString() && newData.val().length <= 32" },
+            "message":    { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 2000" },
+            "role":       { ".validate": "newData.isString() && newData.val().length <= 24" },
+            "roomId":     { ".validate": "newData.isString() && newData.val().length <= 8" },
+            "shell":      { ".validate": "newData.isString() && newData.val().length <= 24" },
+            "userAgent":  { ".validate": "newData.isString() && newData.val().length <= 300" },
+            "reporter":   { ".validate": "newData.isString() && newData.val().length <= 60" },
+            "uid":        { ".validate": "newData.isString() && newData.val().length <= 64" },
+            "ts":         { ".validate": "newData.isNumber()" },
+            "handled":    { ".validate": "newData.isBoolean()" },
+            "$other":     { ".validate": false }
+          }
+        },
+
         "queue": {
-          // Only real interpreter accounts (email/password) may see who is
-          // waiting. Anonymous callers can add themselves to the queue but
-          // cannot read it.
-          ".read": "auth != null && auth.token.firebase.sign_in_provider == 'password'",
+          // Only an APPROVED interpreter may see who is waiting. Gating on
+          // approval rather than on the sign-in provider means Google SSO
+          // works too, and a self-service signup cannot start intercepting
+          // calls from deaf students before a human has vetted it.
+          ".read": "auth != null && root.child('_vrsProto_mariana47/signalingRoot9x/interpreters/' + auth.uid + '/approved').val() === true",
 
           "$roomId": {
             ".write": "auth != null",

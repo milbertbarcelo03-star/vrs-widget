@@ -218,6 +218,111 @@ var VRS = (function () {
     return u.isAnonymous === false;
   }
 
+  // Creates a new interpreter account. The account is inert until an admin
+  // approves it: "approved" is admin-only in the database rules, so nothing
+  // here can grant it. A brand new account can sign in and set its name, and
+  // nothing else.
+  function signUpWithEmail(email, password) {
+    try {
+      return firebase
+        .auth()
+        .createUserWithEmailAndPassword(String(email).trim(), password)
+        .then(function (cred) {
+          authPromise = Promise.resolve(cred.user.uid);
+          return cred.user;
+        });
+    } catch (err) {
+      return Promise.reject(err);
+    }
+  }
+
+  // Single sign-on with a Google account.
+  //
+  // Tries a popup first because it keeps the page state, and falls back to a
+  // full redirect where popups cannot work — an installed iOS home-screen app
+  // is the usual case, and some embedded webviews block them outright.
+  function signInWithGoogle() {
+    try {
+      var provider = new firebase.auth.GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: "select_account" });
+      return firebase
+        .auth()
+        .signInWithPopup(provider)
+        .then(function (res) {
+          authPromise = Promise.resolve(res.user.uid);
+          return res.user;
+        })
+        .catch(function (err) {
+          var code = (err && err.code) || "";
+          var popupUnavailable =
+            code === "auth/popup-blocked" ||
+            code === "auth/operation-not-supported-in-this-environment" ||
+            code === "auth/cancelled-popup-request";
+          if (popupUnavailable) {
+            // Navigates away; the result is picked up by
+            // consumeRedirectResult() on the way back in.
+            return firebase.auth().signInWithRedirect(provider);
+          }
+          throw err;
+        });
+    } catch (err) {
+      return Promise.reject(err);
+    }
+  }
+
+  // Called once at start-up to collect the result of a redirect sign-in.
+  // Resolves with null on a normal load, so it is always safe to call.
+  function consumeRedirectResult() {
+    try {
+      return firebase
+        .auth()
+        .getRedirectResult()
+        .then(function (res) {
+          if (res && res.user) {
+            authPromise = Promise.resolve(res.user.uid);
+            return res.user;
+          }
+          return null;
+        })
+        .catch(function (err) {
+          console.error("VRS: redirect sign-in failed", err);
+          return null;
+        });
+    } catch (err) {
+      return Promise.resolve(null);
+    }
+  }
+
+  function isAdminUser(uid) {
+    if (!uid) return Promise.resolve(false);
+    return ref("admins/" + uid)
+      .once("value")
+      .then(function (snap) {
+        return snap.val() === true;
+      })
+      .catch(function () {
+        return false;
+      });
+  }
+
+  function listInterpreters() {
+    return ref("interpreters")
+      .once("value")
+      .then(function (snap) {
+        var val = snap.val() || {};
+        return Object.keys(val).map(function (k) {
+          var item = val[k] || {};
+          item.uid = k;
+          return item;
+        });
+      });
+  }
+
+  // Admin-only in the rules; rejects for everyone else.
+  function setInterpreterApproved(uid, approved) {
+    return ref("interpreters/" + uid + "/approved").set(!!approved);
+  }
+
   // ---- Interpreter profiles -------------------------------------------------
   // rules: interpreters/$uid is readable by any signed-in user (so a caller can
   // be shown who they are connected to) but writable only by that interpreter.
@@ -238,6 +343,10 @@ var VRS = (function () {
     };
     if (profile && profile.createdAt) payload.createdAt = profile.createdAt;
     else payload.createdAt = nowTs();
+    // Without this an admin sees a bare uid on the approval list and has no
+    // way to tell which person it belongs to.
+    var authUser = currentAuthUser();
+    if (authUser && authUser.email) payload.email = String(authUser.email).slice(0, 120);
     return ref("interpreters/" + uid).update(payload);
   }
 
@@ -755,6 +864,324 @@ var VRS = (function () {
     return { start: start, stop: stop, peers: peers };
   }
 
+  // ---- Feedback / problem reports ------------------------------------------
+  // Users report issues from inside the app rather than having to email
+  // someone. Reports land in the database, where they can be read back and
+  // acted on.
+  //
+  // The whole UI is injected from here instead of being written into
+  // call.html and interpreter.html. Both pages get an identical widget from
+  // one implementation, and the desktop app and the installed home-screen
+  // apps pick it up automatically, since they all load these same pages.
+
+  var feedbackOpts = { role: "unknown", getRoomId: null };
+  var feedbackRating = 0;
+  var feedbackMounted = false;
+
+  // Which wrapper the page is running inside. Worth capturing on every
+  // report: "video is black" often turns out to be specific to one of these.
+  function appShell() {
+    try {
+      if (document.documentElement.getAttribute("data-vrs-shell") === "electron") {
+        return "desktop";
+      }
+      if (navigator.standalone === true) return "ios-installed";
+      if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) {
+        return "installed";
+      }
+      return "browser";
+    } catch (err) {
+      return "unknown";
+    }
+  }
+
+  function submitFeedback(entry) {
+    entry = entry || {};
+    var payload = {
+      message: String(entry.message || "").slice(0, 2000),
+      category: String(entry.category || "other").slice(0, 32),
+      role: String(entry.role || feedbackOpts.role || "unknown").slice(0, 24),
+      shell: appShell(),
+      userAgent: String(navigator.userAgent || "").slice(0, 300),
+      ts: nowTs()
+    };
+    if (entry.rating) payload.rating = Number(entry.rating);
+    if (entry.roomId) payload.roomId = String(entry.roomId).slice(0, 8);
+    if (entry.reporter) payload.reporter = String(entry.reporter).slice(0, 60);
+    var uid = currentUid();
+    if (uid) payload.uid = uid;
+    return ref("feedback").push(payload);
+  }
+
+  // Reads reports newest-last. Rules restrict this to interpreter accounts,
+  // so it rejects for an anonymous caller by design.
+  function getFeedback(limit) {
+    return ref("feedback")
+      .orderByChild("ts")
+      .limitToLast(limit || 200)
+      .once("value")
+      .then(function (snap) {
+        var val = snap.val() || {};
+        return Object.keys(val).map(function (k) {
+          var item = val[k];
+          item.id = k;
+          return item;
+        }).sort(function (a, b) {
+          return (b.ts || 0) - (a.ts || 0);
+        });
+      });
+  }
+
+  function markFeedbackHandled(id, handled) {
+    return ref("feedback/" + id).update({ handled: !!handled });
+  }
+
+  var FEEDBACK_CSS = [
+    ".vrs-fb-overlay{position:fixed;inset:0;z-index:2147483000;background:rgba(4,8,16,.72);",
+    "display:flex;align-items:center;justify-content:center;padding:16px;overflow-y:auto;}",
+    ".vrs-fb-overlay[hidden]{display:none!important;}",
+    ".vrs-fb-card{background:var(--vrs-panel,#12203a);color:var(--vrs-text,#f2f5fa);",
+    "border:1px solid var(--vrs-border,#24365a);border-radius:16px;padding:24px;",
+    "max-width:460px;width:100%;box-shadow:0 24px 60px rgba(0,0,0,.5);",
+    "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;",
+    "max-height:calc(100vh - 32px);overflow-y:auto;}",
+    ".vrs-fb-card h2{margin:0 0 6px;font-size:20px;font-family:var(--vrs-font-display,inherit);}",
+    ".vrs-fb-sub{margin:0 0 18px;font-size:13px;line-height:1.6;color:var(--vrs-muted,#9fb2d4);}",
+    ".vrs-fb-field{margin-bottom:16px;}",
+    ".vrs-fb-label{display:block;font-size:13px;font-weight:600;margin-bottom:8px;}",
+    ".vrs-fb-stars{display:flex;gap:6px;}",
+    ".vrs-fb-star{width:44px;height:44px;font-size:22px;line-height:1;cursor:pointer;",
+    "background:var(--vrs-panel-2,#1a2c4d);border:1px solid var(--vrs-border,#24365a);",
+    "border-radius:8px;color:#5c6f92;transition:transform .12s ease,color .12s ease;}",
+    ".vrs-fb-star:hover{transform:translateY(-2px);}",
+    ".vrs-fb-star.vrs-fb-on{color:#f4b740;border-color:#f4b740;}",
+    ".vrs-fb-star:focus-visible{outline:2px solid var(--vrs-purple,#b25d22);outline-offset:2px;}",
+    ".vrs-fb-ratinglabel{margin-top:6px;font-size:12px;color:var(--vrs-muted,#9fb2d4);}",
+    ".vrs-fb-input{width:100%;box-sizing:border-box;min-height:44px;padding:10px 12px;",
+    "font-size:15px;font-family:inherit;border-radius:8px;",
+    "border:1px solid var(--vrs-border,#24365a);background:var(--vrs-panel-2,#1a2c4d);",
+    "color:var(--vrs-text,#f2f5fa);}",
+    ".vrs-fb-input:focus{outline:2px solid var(--vrs-purple,#b25d22);outline-offset:1px;}",
+    "textarea.vrs-fb-input{resize:vertical;line-height:1.5;}",
+    ".vrs-fb-count{margin-top:4px;font-size:11px;color:var(--vrs-muted,#9fb2d4);text-align:right;}",
+    ".vrs-fb-context{font-size:11px;color:var(--vrs-muted,#9fb2d4);line-height:1.6;",
+    "background:var(--vrs-panel-2,#1a2c4d);border-radius:8px;padding:10px 12px;margin-bottom:16px;}",
+    ".vrs-fb-actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;}",
+    ".vrs-fb-btn{min-height:44px;padding:10px 18px;font-size:15px;font-weight:700;",
+    "font-family:var(--vrs-font-display,inherit);border-radius:8px;cursor:pointer;border:none;}",
+    ".vrs-fb-btn-primary{color:#fff;background:linear-gradient(135deg,var(--vrs-purple,#b25d22),var(--vrs-purple-dark,#96491a));}",
+    ".vrs-fb-btn-secondary{background:var(--vrs-panel-2,#1a2c4d);color:var(--vrs-text,#f2f5fa);",
+    "border:1px solid var(--vrs-border,#24365a);}",
+    ".vrs-fb-btn:disabled{opacity:.5;cursor:not-allowed;}",
+    ".vrs-fb-status{margin-top:12px;font-size:13px;font-weight:600;min-height:18px;}",
+    ".vrs-fb-status.vrs-fb-err{color:var(--vrs-danger,#e0405a);}",
+    ".vrs-fb-status.vrs-fb-ok{color:var(--vrs-success,#22c55e);}",
+    ".vrs-fb-trigger{background:none;border:none;color:var(--vrs-muted,#9fb2d4);",
+    "font-size:13px;text-decoration:underline;cursor:pointer;padding:8px 0;min-height:36px;}",
+    ".vrs-fb-trigger:hover{color:var(--vrs-text,#f2f5fa);}"
+  ].join("");
+
+  var RATING_WORDS = ["Not rated", "Unusable", "Poor", "Okay", "Good", "Worked well"];
+
+  function setFeedbackRating(n) {
+    feedbackRating = n;
+    var i;
+    var stars = document.querySelectorAll(".vrs-fb-star");
+    for (i = 0; i < stars.length; i++) {
+      var on = i < n;
+      if (on) stars[i].classList.add("vrs-fb-on");
+      else stars[i].classList.remove("vrs-fb-on");
+      stars[i].setAttribute("aria-pressed", on ? "true" : "false");
+    }
+    var label = document.getElementById("vrsFbRatingLabel");
+    // The primary users are deaf, so the rating must read as words on screen,
+    // never as a colour or an icon alone.
+    if (label) label.textContent = RATING_WORDS[n] || RATING_WORDS[0];
+  }
+
+  function buildFeedbackUi() {
+    var style = document.createElement("style");
+    style.id = "vrs-feedback-style";
+    style.textContent = FEEDBACK_CSS;
+    document.head.appendChild(style);
+
+    var overlay = document.createElement("div");
+    overlay.className = "vrs-fb-overlay";
+    overlay.id = "vrsFeedbackOverlay";
+    overlay.hidden = true;
+    overlay.setAttribute("role", "dialog");
+    overlay.setAttribute("aria-modal", "true");
+    overlay.setAttribute("aria-labelledby", "vrsFbTitle");
+
+    var stars = "";
+    for (var i = 1; i <= 5; i++) {
+      stars += '<button type="button" class="vrs-fb-star" data-star="' + i +
+        '" aria-pressed="false" aria-label="' + i + ' out of 5">\u2605</button>';
+    }
+
+    overlay.innerHTML =
+      '<div class="vrs-fb-card">' +
+        '<h2 id="vrsFbTitle">Report a problem</h2>' +
+        '<p class="vrs-fb-sub">Tell us what went wrong and it goes straight to the people who build this app.</p>' +
+        '<div class="vrs-fb-field">' +
+          '<span class="vrs-fb-label">How well did it work?</span>' +
+          '<div class="vrs-fb-stars" id="vrsFbStars" role="group" aria-label="Rating out of 5">' + stars + '</div>' +
+          '<div class="vrs-fb-ratinglabel" id="vrsFbRatingLabel">Not rated</div>' +
+        '</div>' +
+        '<div class="vrs-fb-field">' +
+          '<label class="vrs-fb-label" for="vrsFbCategory">What kind of problem?</label>' +
+          '<select id="vrsFbCategory" class="vrs-fb-input">' +
+            '<option value="video">Video \u2014 could not see the other person</option>' +
+            '<option value="audio">Audio or microphone</option>' +
+            '<option value="connection">Call dropped or would not connect</option>' +
+            '<option value="waiting">No interpreter answered</option>' +
+            '<option value="signin">Could not sign in</option>' +
+            '<option value="confusing">Something was confusing to use</option>' +
+            '<option value="other" selected>Something else</option>' +
+          '</select>' +
+        '</div>' +
+        '<div class="vrs-fb-field">' +
+          '<label class="vrs-fb-label" for="vrsFbMessage">What happened?</label>' +
+          '<textarea id="vrsFbMessage" class="vrs-fb-input" rows="4" maxlength="2000" ' +
+            'placeholder="For example: the interpreter answered but I only saw a black screen."></textarea>' +
+          '<div class="vrs-fb-count" id="vrsFbCount">0 / 2000</div>' +
+        '</div>' +
+        '<div class="vrs-fb-field">' +
+          '<label class="vrs-fb-label" for="vrsFbReporter">Your name (optional)</label>' +
+          '<input id="vrsFbReporter" class="vrs-fb-input" type="text" maxlength="60" ' +
+            'autocapitalize="words" autocorrect="off" spellcheck="false" placeholder="So we can follow up">' +
+        '</div>' +
+        '<div class="vrs-fb-context" id="vrsFbContext"></div>' +
+        '<div class="vrs-fb-actions">' +
+          '<button type="button" class="vrs-fb-btn vrs-fb-btn-secondary" id="vrsFbCancel">Cancel</button>' +
+          '<button type="button" class="vrs-fb-btn vrs-fb-btn-primary" id="vrsFbSubmit">Send report</button>' +
+        '</div>' +
+        '<div class="vrs-fb-status" id="vrsFbStatus" role="status"></div>' +
+      '</div>';
+
+    document.body.appendChild(overlay);
+
+    var starEls = overlay.querySelectorAll(".vrs-fb-star");
+    for (var j = 0; j < starEls.length; j++) {
+      starEls[j].addEventListener("click", function (evt) {
+        setFeedbackRating(Number(evt.currentTarget.getAttribute("data-star")));
+      });
+    }
+
+    var msg = document.getElementById("vrsFbMessage");
+    msg.addEventListener("input", function () {
+      document.getElementById("vrsFbCount").textContent = msg.value.length + " / 2000";
+    });
+
+    document.getElementById("vrsFbCancel").addEventListener("click", closeFeedback);
+    document.getElementById("vrsFbSubmit").addEventListener("click", onFeedbackSubmit);
+
+    overlay.addEventListener("click", function (evt) {
+      if (evt.target === overlay) closeFeedback();
+    });
+    document.addEventListener("keydown", function (evt) {
+      if (evt.key === "Escape" && !overlay.hidden) closeFeedback();
+    });
+  }
+
+  function onFeedbackSubmit() {
+    var msgEl = document.getElementById("vrsFbMessage");
+    var statusEl = document.getElementById("vrsFbStatus");
+    var btn = document.getElementById("vrsFbSubmit");
+    var text = (msgEl.value || "").trim();
+
+    if (!text) {
+      statusEl.className = "vrs-fb-status vrs-fb-err";
+      statusEl.textContent = "Please describe what happened before sending.";
+      msgEl.focus();
+      return;
+    }
+
+    btn.disabled = true;
+    statusEl.className = "vrs-fb-status";
+    statusEl.textContent = "Sending\u2026";
+
+    var roomId = null;
+    try {
+      if (typeof feedbackOpts.getRoomId === "function") roomId = feedbackOpts.getRoomId();
+    } catch (err) {
+      console.error("VRS: feedback getRoomId failed", err);
+    }
+
+    submitFeedback({
+      message: text,
+      category: document.getElementById("vrsFbCategory").value,
+      rating: feedbackRating,
+      role: feedbackOpts.role,
+      roomId: roomId,
+      reporter: (document.getElementById("vrsFbReporter").value || "").trim()
+    })
+      .then(function () {
+        statusEl.className = "vrs-fb-status vrs-fb-ok";
+        statusEl.textContent = "Thank you \u2014 your report was sent.";
+        msgEl.value = "";
+        document.getElementById("vrsFbCount").textContent = "0 / 2000";
+        setFeedbackRating(0);
+        btn.disabled = false;
+        setTimeout(closeFeedback, 1600);
+      })
+      .catch(function (err) {
+        console.error("VRS: feedback submit failed", err);
+        btn.disabled = false;
+        statusEl.className = "vrs-fb-status vrs-fb-err";
+        // Never lose what they typed on a failure - they may have spent real
+        // effort describing the problem.
+        statusEl.textContent = "Could not send. Check your connection and try again.";
+      });
+  }
+
+  function openFeedback() {
+    try {
+      if (!feedbackMounted) return;
+      var overlay = document.getElementById("vrsFeedbackOverlay");
+      if (!overlay) return;
+
+      var roomId = null;
+      try {
+        if (typeof feedbackOpts.getRoomId === "function") roomId = feedbackOpts.getRoomId();
+      } catch (err) { /* context is a nicety, never block the form */ }
+
+      // State plainly what gets attached. People are more willing to report a
+      // problem when nothing is collected behind their back.
+      var bits = ["Also sent: your device type, the app version, and how you opened the app."];
+      if (roomId) bits.push("Room " + roomId + ".");
+      document.getElementById("vrsFbContext").textContent = bits.join(" ");
+
+      document.getElementById("vrsFbStatus").textContent = "";
+      overlay.hidden = false;
+      try { document.getElementById("vrsFbMessage").focus(); } catch (err) { /* ignore */ }
+    } catch (err) {
+      console.error("VRS: openFeedback failed", err);
+    }
+  }
+
+  function closeFeedback() {
+    var overlay = document.getElementById("vrsFeedbackOverlay");
+    if (overlay) overlay.hidden = true;
+  }
+
+  // opts.role      - "deaf" | "interpreter" | "third", stamped on each report
+  // opts.getRoomId - optional function returning the current room code
+  function mountFeedbackUi(opts) {
+    try {
+      if (feedbackMounted) return;
+      if (!document.body) return;
+      feedbackOpts = {
+        role: (opts && opts.role) || "unknown",
+        getRoomId: (opts && opts.getRoomId) || null
+      };
+      buildFeedbackUi();
+      feedbackMounted = true;
+    } catch (err) {
+      console.error("VRS: mountFeedbackUi failed", err);
+    }
+  }
+
   // ---- Service worker / PWA install ----------------------------------------
 
   // Registers the service worker so the app can be installed to an iPhone or
@@ -926,6 +1353,12 @@ var VRS = (function () {
     init: init,
     ready: ready,
     signInWithEmail: signInWithEmail,
+    signUpWithEmail: signUpWithEmail,
+    signInWithGoogle: signInWithGoogle,
+    consumeRedirectResult: consumeRedirectResult,
+    isAdminUser: isAdminUser,
+    listInterpreters: listInterpreters,
+    setInterpreterApproved: setInterpreterApproved,
     signOutUser: signOutUser,
     currentAuthUser: currentAuthUser,
     currentUid: currentUid,
@@ -957,6 +1390,13 @@ var VRS = (function () {
     isStale: isStale,
     createMesh: createMesh,
     iceServerConfig: iceServerConfig,
+    submitFeedback: submitFeedback,
+    getFeedback: getFeedback,
+    markFeedbackHandled: markFeedbackHandled,
+    mountFeedbackUi: mountFeedbackUi,
+    openFeedback: openFeedback,
+    closeFeedback: closeFeedback,
+    appShell: appShell,
     registerServiceWorker: registerServiceWorker,
     isInstalledApp: isInstalledApp,
     isIOS: isIOS,

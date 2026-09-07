@@ -403,6 +403,35 @@
   }
   .vrs-gate-btn:active{ transform:scale(.98); }
   .vrs-gate-btn:disabled{ opacity:.5;cursor:not-allowed; }
+  .vrs-gate-or{
+    display:flex;align-items:center;gap:var(--sp-3);
+    margin:var(--sp-4) 0;color:var(--vrs-muted);font-size:var(--fs-xs);
+  }
+  .vrs-gate-or::before,.vrs-gate-or::after{
+    content:"";flex:1;height:1px;background:var(--vrs-border);
+  }
+  .vrs-gate-google{
+    background:#fff!important;color:#1f1f1f!important;
+    display:flex;align-items:center;justify-content:center;gap:var(--sp-2);
+    box-shadow:0 1px 2px rgba(0,0,0,.35)!important;margin-top:0!important;
+  }
+  .vrs-gate-google .vrs-g{
+    font-weight:800;font-family:var(--vrs-font-display);color:#4285f4;font-size:var(--fs-md);
+  }
+  .vrs-gate-link{
+    display:block;width:100%;margin-top:var(--sp-4);background:none;border:none;
+    color:var(--vrs-muted);font-size:var(--fs-sm);text-decoration:underline;
+    cursor:pointer;padding:var(--sp-2) 0;min-height:36px;
+  }
+  .vrs-gate-link:hover{ color:var(--vrs-text); }
+  .vrs-pending-who{ font-size:var(--fs-sm);color:var(--vrs-text);font-weight:600; }
+  .vrs-admin-row{
+    display:flex;align-items:center;justify-content:space-between;gap:var(--sp-3);
+    border:1px solid var(--vrs-border);border-radius:var(--radius-sm);
+    padding:var(--sp-3);margin-bottom:var(--sp-2);background:var(--vrs-panel-2);
+  }
+  .vrs-admin-row .vrs-admin-meta{ font-size:var(--fs-xs);color:var(--vrs-muted); }
+
   .vrs-room-tag{
     font-size:var(--fs-2xs);color:var(--vrs-muted);font-weight:600;
     background:var(--vrs-panel-2);border:1px solid var(--vrs-border);
@@ -434,6 +463,9 @@
       <div id="interpreterNameText"></div>
       <div id="interpreterIdText"></div>
       <button type="button" id="btnSignOut" hidden>Sign out</button>
+      <button type="button" id="btnReportProblem" class="vrs-fb-trigger">Report a problem</button>
+      <button type="button" id="btnViewReports" class="vrs-fb-trigger" hidden>View reports</button>
+      <button type="button" id="btnManageAccounts" class="vrs-fb-trigger" hidden>Manage accounts</button>
       <div class="vrs-toggle-row">
         <span id="onlineStatusText" class="vrs-status-offline">Offline</span>
         <div id="onlineSwitch" class="vrs-switch" role="switch" aria-checked="false" tabindex="0" aria-label="Toggle online status">
@@ -508,8 +540,30 @@
            autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false">
     <input id="vrsGateInput" class="vrs-gate-field" type="password" placeholder="Password"
            autocomplete="current-password" autocapitalize="none" autocorrect="off" spellcheck="false">
+    <input id="vrsGateConfirm" class="vrs-gate-field" type="password" placeholder="Confirm password"
+           autocomplete="new-password" autocapitalize="none" autocorrect="off" spellcheck="false" hidden>
     <button type="button" id="vrsGateBtn" class="vrs-gate-btn">Sign In</button>
+
+    <div class="vrs-gate-or"><span>or</span></div>
+    <button type="button" id="vrsGoogleBtn" class="vrs-gate-btn vrs-gate-google">
+      <span class="vrs-g" aria-hidden="true">G</span> Continue with Google
+    </button>
+
     <div id="vrsGateError" class="vrs-gate-error" role="alert"></div>
+    <button type="button" id="vrsGateToggle" class="vrs-gate-link">
+      New interpreter? Create an account
+    </button>
+  </div>
+
+  <div class="vrs-gate-card" id="vrsPendingCard" hidden>
+    <div class="vrs-emoji-big" aria-hidden="true">\u23f3</div>
+    <h2>Waiting for approval</h2>
+    <p>Your account was created, but an administrator has to approve it before
+       you can receive calls. This protects deaf callers from being connected
+       to someone who has not been verified.</p>
+    <p id="vrsPendingWho" class="vrs-pending-who"></p>
+    <button type="button" id="vrsPendingRefresh" class="vrs-gate-btn">Check again</button>
+    <button type="button" id="vrsPendingSignOut" class="vrs-gate-link">Sign out</button>
   </div>
 
   <div class="vrs-gate-card" id="vrsProfileCard" hidden>
@@ -1388,13 +1442,18 @@ try {
   // anonymous visitor cannot read who is waiting even if they open this page.
 
   var interpreterProfile = null;
+  var signUpMode = false;
 
   function gateEls() {
     return {
       overlay: document.getElementById('vrsGateOverlay'),
       signInCard: document.getElementById('vrsSignInCard'),
+      pendingCard: document.getElementById('vrsPendingCard'),
       email: document.getElementById('vrsGateEmail'),
       input: document.getElementById('vrsGateInput'),
+      confirm: document.getElementById('vrsGateConfirm'),
+      googleBtn: document.getElementById('vrsGoogleBtn'),
+      toggle: document.getElementById('vrsGateToggle'),
       btn: document.getElementById('vrsGateBtn'),
       err: document.getElementById('vrsGateError'),
       profileCard: document.getElementById('vrsProfileCard'),
@@ -1414,7 +1473,15 @@ try {
     if (code === 'auth/too-many-requests') return 'Too many attempts. Wait a minute and try again.';
     if (code === 'auth/network-request-failed') return 'No connection. Check your network and try again.';
     if (code === 'auth/operation-not-allowed') {
-      return 'Email sign-in is not enabled on this Firebase project yet.';
+      return 'That sign-in method is not enabled on this Firebase project yet.';
+    }
+    if (code === 'auth/email-already-in-use') return 'That email already has an account. Try signing in instead.';
+    if (code === 'auth/weak-password') return 'Choose a password of at least 6 characters.';
+    if (code === 'auth/unauthorized-domain') {
+      return 'This web address is not authorised for sign-in in the Firebase console.';
+    }
+    if (code === 'auth/account-exists-with-different-credential') {
+      return 'That email already has an account created a different way. Sign in with your password instead.';
     }
     // invalid-credential / wrong-password / user-not-found are deliberately
     // reported identically so the form does not confirm which emails exist.
@@ -1426,7 +1493,38 @@ try {
     if (els.overlay) els.overlay.classList.remove('vrs-gate-hidden');
     if (els.signInCard) els.signInCard.hidden = false;
     if (els.profileCard) els.profileCard.hidden = true;
+    if (els.pendingCard) els.pendingCard.hidden = true;
     try { els.email.focus(); } catch (err) { /* ignore */ }
+  }
+
+  // Switches the one card between "sign in" and "create account" rather than
+  // maintaining two nearly identical forms.
+  function setSignUpMode(on) {
+    signUpMode = !!on;
+    var els = gateEls();
+    els.confirm.hidden = !signUpMode;
+    els.btn.textContent = signUpMode ? 'Create Account' : 'Sign In';
+    els.toggle.textContent = signUpMode
+      ? 'Already have an account? Sign in'
+      : 'New interpreter? Create an account';
+    els.input.setAttribute('autocomplete', signUpMode ? 'new-password' : 'current-password');
+    els.err.textContent = '';
+    document.querySelector('#vrsSignInCard h2').textContent =
+      signUpMode ? 'Create Interpreter Account' : 'Interpreter Sign In';
+  }
+
+  function showPending(profile) {
+    var els = gateEls();
+    if (els.overlay) els.overlay.classList.remove('vrs-gate-hidden');
+    if (els.signInCard) els.signInCard.hidden = true;
+    if (els.profileCard) els.profileCard.hidden = true;
+    if (els.pendingCard) els.pendingCard.hidden = false;
+    var who = document.getElementById('vrsPendingWho');
+    var user = VRS.currentAuthUser();
+    if (who) {
+      who.textContent = ((profile && profile.displayName) || (user && user.email) || '') +
+        (user && user.email && profile && profile.displayName ? ' \u00b7 ' + user.email : '');
+    }
   }
 
   function showProfileSetup() {
@@ -1448,6 +1546,17 @@ try {
         (interpreterProfile.title ? ' \u00b7 ' + interpreterProfile.title : '');
     }
     if (signOutEl) signOutEl.hidden = false;
+    // The rules only let interpreter accounts read reports back, so this
+    // button appears once signed in.
+    var reportsEl = document.getElementById('btnViewReports');
+    if (reportsEl) reportsEl.hidden = false;
+
+    // The Approve button is admin-only. Hiding it is a convenience; the rules
+    // are what actually stop a non-admin from changing the flag.
+    VRS.isAdminUser(VRS.currentUid()).then(function (isAdmin) {
+      var adminEl = document.getElementById('btnManageAccounts');
+      if (adminEl && isAdmin) adminEl.hidden = false;
+    });
 
     var uid = VRS.currentUid();
     if (uid) VRS.touchInterpreter(uid);
@@ -1465,12 +1574,19 @@ try {
     }
     VRS.getInterpreterProfile(uid)
       .then(function (profile) {
-        if (profile && profile.displayName) {
-          interpreterProfile = profile;
-          unlockDashboard();
+        if (!profile || !profile.displayName) {
+          showProfileSetup();
           return;
         }
-        showProfileSetup();
+        interpreterProfile = profile;
+        // The database rules are the real gate - an unapproved account simply
+        // cannot read the queue. This screen exists so that failure is
+        // explained rather than showing an empty waiting room forever.
+        if (profile.approved !== true) {
+          showPending(profile);
+          return;
+        }
+        unlockDashboard();
       })
       .catch(function (err) {
         console.error('VRS: could not load interpreter profile', err);
@@ -1489,6 +1605,18 @@ try {
       els.err.textContent = 'Enter both your email and password.';
       return;
     }
+    if (signUpMode) {
+      if (password.length < 6) {
+        els.err.textContent = 'Choose a password of at least 6 characters.';
+        return;
+      }
+      if (password !== (els.confirm.value || '')) {
+        els.err.textContent = 'The two passwords do not match.';
+        return;
+      }
+      onSignUpSubmit(email, password);
+      return;
+    }
     els.btn.disabled = true;
     els.err.textContent = '';
     VRS.signInWithEmail(email, password)
@@ -1501,6 +1629,47 @@ try {
         console.error('VRS: interpreter sign-in failed', err);
         els.btn.disabled = false;
         els.input.value = '';
+        els.err.textContent = authErrorMessage(err);
+      });
+  }
+
+  function onSignUpSubmit(email, password) {
+    var els = gateEls();
+    els.btn.disabled = true;
+    els.err.textContent = '';
+    VRS.signUpWithEmail(email, password)
+      .then(function () {
+        els.btn.disabled = false;
+        els.input.value = '';
+        els.confirm.value = '';
+        // No profile yet, so this lands on the name/title step, then pending.
+        afterSignedIn();
+      })
+      .catch(function (err) {
+        console.error('VRS: sign-up failed', err);
+        els.btn.disabled = false;
+        els.err.textContent = authErrorMessage(err);
+      });
+  }
+
+  function onGoogleSignIn() {
+    var els = gateEls();
+    els.googleBtn.disabled = true;
+    els.err.textContent = '';
+    VRS.signInWithGoogle()
+      .then(function (user) {
+        els.googleBtn.disabled = false;
+        // A redirect sign-in resolves with nothing because the page navigates
+        // away; consumeRedirectResult() picks it up on the way back.
+        if (user) afterSignedIn();
+      })
+      .catch(function (err) {
+        console.error('VRS: Google sign-in failed', err);
+        els.googleBtn.disabled = false;
+        if (err && err.code === 'auth/popup-closed-by-user') {
+          els.err.textContent = '';
+          return;
+        }
         els.err.textContent = authErrorMessage(err);
       });
   }
@@ -1538,6 +1707,222 @@ try {
       });
   }
 
+  // ---- Admin: approve interpreter accounts ---------------------------------
+  // Anyone can sign up, but a new account cannot read the call queue until it
+  // is approved here. Approval is admin-only in the database rules; this panel
+  // is just a front end for that flag.
+
+  function adminPanelEl() {
+    var existing = document.getElementById('vrsAdminOverlay');
+    if (existing) return existing;
+
+    var overlay = document.createElement('div');
+    overlay.id = 'vrsAdminOverlay';
+    overlay.className = 'vrs-fb-overlay';
+    overlay.hidden = true;
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.innerHTML =
+      '<div class="vrs-fb-card" style="max-width:640px;">' +
+        '<h2>Interpreter accounts</h2>' +
+        '<p class="vrs-fb-sub">Approve an account before it can receive calls from deaf callers.</p>' +
+        '<div id="vrsAdminList" style="max-height:52vh;overflow-y:auto;"></div>' +
+        '<div class="vrs-fb-actions" style="margin-top:16px;">' +
+          '<button type="button" class="vrs-fb-btn vrs-fb-btn-secondary" id="vrsAdminClose">Close</button>' +
+        '</div>' +
+        '<div class="vrs-fb-status" id="vrsAdminStatus" role="status"></div>' +
+      '</div>';
+    document.body.appendChild(overlay);
+    document.getElementById('vrsAdminClose').addEventListener('click', function () {
+      overlay.hidden = true;
+    });
+    overlay.addEventListener('click', function (evt) {
+      if (evt.target === overlay) overlay.hidden = true;
+    });
+    return overlay;
+  }
+
+  function renderAdminList(list) {
+    var box = document.getElementById('vrsAdminList');
+    var status = document.getElementById('vrsAdminStatus');
+    box.textContent = '';
+    if (!list.length) {
+      box.textContent = 'No interpreter accounts yet.';
+      return;
+    }
+    // Unapproved first: those are the ones needing action.
+    list.sort(function (a, b) {
+      return (a.approved === true ? 1 : 0) - (b.approved === true ? 1 : 0);
+    });
+    list.forEach(function (item) {
+      var row = document.createElement('div');
+      row.className = 'vrs-admin-row';
+
+      var left = document.createElement('div');
+      var name = document.createElement('div');
+      name.textContent = item.displayName || '(no name yet)';
+      name.style.cssText = 'font-weight:700;';
+      var meta = document.createElement('div');
+      meta.className = 'vrs-admin-meta';
+      meta.textContent = (item.email || item.uid) +
+        (item.title ? ' \u00b7 ' + item.title : '') +
+        (item.approved === true ? ' \u00b7 approved' : ' \u00b7 awaiting approval');
+      left.appendChild(name);
+      left.appendChild(meta);
+
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'vrs-fb-btn ' +
+        (item.approved === true ? 'vrs-fb-btn-secondary' : 'vrs-fb-btn-primary');
+      btn.textContent = item.approved === true ? 'Revoke' : 'Approve';
+      btn.addEventListener('click', function () {
+        btn.disabled = true;
+        VRS.setInterpreterApproved(item.uid, item.approved !== true)
+          .then(function () {
+            status.className = 'vrs-fb-status vrs-fb-ok';
+            status.textContent = 'Updated ' + (item.displayName || item.uid) + '.';
+            openAdminPanel();
+          })
+          .catch(function (err) {
+            console.error('VRS: approval change failed', err);
+            btn.disabled = false;
+            status.className = 'vrs-fb-status vrs-fb-err';
+            status.textContent = 'Could not change that. Are you an admin?';
+          });
+      });
+
+      row.appendChild(left);
+      row.appendChild(btn);
+      box.appendChild(row);
+    });
+  }
+
+  function openAdminPanel() {
+    var overlay = adminPanelEl();
+    overlay.hidden = false;
+    var status = document.getElementById('vrsAdminStatus');
+    status.className = 'vrs-fb-status';
+    status.textContent = 'Loading\u2026';
+    VRS.listInterpreters()
+      .then(function (list) {
+        status.textContent = '';
+        renderAdminList(list);
+      })
+      .catch(function (err) {
+        console.error('VRS: could not list interpreters', err);
+        status.className = 'vrs-fb-status vrs-fb-err';
+        status.textContent = 'Could not load accounts.';
+      });
+  }
+
+  // ---- Reports panel -------------------------------------------------------
+  // Lists the problem reports users have filed. Reading is restricted by the
+  // database rules to interpreter accounts, so this rejects for anyone else.
+
+  function reportsPanelEl() {
+    var existing = document.getElementById('vrsReportsOverlay');
+    if (existing) return existing;
+
+    var overlay = document.createElement('div');
+    overlay.id = 'vrsReportsOverlay';
+    overlay.className = 'vrs-fb-overlay';
+    overlay.hidden = true;
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.innerHTML =
+      '<div class="vrs-fb-card" style="max-width:680px;">' +
+        '<h2>Problem reports</h2>' +
+        '<p class="vrs-fb-sub">Newest first. Copy them as JSON to hand to whoever is fixing the app.</p>' +
+        '<div id="vrsReportsList" style="max-height:50vh;overflow-y:auto;"></div>' +
+        '<div class="vrs-fb-actions" style="margin-top:16px;">' +
+          '<button type="button" class="vrs-fb-btn vrs-fb-btn-secondary" id="vrsReportsClose">Close</button>' +
+          '<button type="button" class="vrs-fb-btn vrs-fb-btn-primary" id="vrsReportsCopy">Copy all as JSON</button>' +
+        '</div>' +
+        '<div class="vrs-fb-status" id="vrsReportsStatus" role="status"></div>' +
+      '</div>';
+    document.body.appendChild(overlay);
+
+    document.getElementById('vrsReportsClose').addEventListener('click', function () {
+      overlay.hidden = true;
+    });
+    overlay.addEventListener('click', function (evt) {
+      if (evt.target === overlay) overlay.hidden = true;
+    });
+    return overlay;
+  }
+
+  function renderReports(list) {
+    var box = document.getElementById('vrsReportsList');
+    if (!box) return;
+    box.textContent = '';
+    if (!list.length) {
+      box.textContent = 'No reports yet.';
+      return;
+    }
+    list.forEach(function (r) {
+      var card = document.createElement('div');
+      card.style.cssText =
+        'border:1px solid var(--vrs-border);border-radius:8px;padding:12px;margin-bottom:10px;' +
+        'background:var(--vrs-panel-2);';
+
+      var head = document.createElement('div');
+      head.style.cssText = 'font-size:12px;color:var(--vrs-muted);margin-bottom:6px;';
+      var when = r.ts ? new Date(r.ts).toLocaleString() : 'unknown time';
+      var stars = r.rating ? ' \u00b7 ' + r.rating + '/5' : '';
+      head.textContent = when + ' \u00b7 ' + (r.role || '?') + ' \u00b7 ' + (r.category || 'other') +
+        stars + ' \u00b7 ' + (r.shell || '?') + (r.roomId ? ' \u00b7 room ' + r.roomId : '');
+
+      var body = document.createElement('div');
+      body.style.cssText = 'font-size:14px;line-height:1.5;white-space:pre-wrap;';
+      // textContent, not innerHTML: report text is user input and must never
+      // be able to inject markup into this dashboard.
+      body.textContent = r.message || '';
+
+      card.appendChild(head);
+      card.appendChild(body);
+      if (r.reporter) {
+        var who = document.createElement('div');
+        who.style.cssText = 'font-size:12px;color:var(--vrs-muted);margin-top:6px;';
+        who.textContent = '\u2014 ' + r.reporter;
+        card.appendChild(who);
+      }
+      box.appendChild(card);
+    });
+  }
+
+  function openReportsPanel() {
+    var overlay = reportsPanelEl();
+    overlay.hidden = false;
+    var status = document.getElementById('vrsReportsStatus');
+    status.className = 'vrs-fb-status';
+    status.textContent = 'Loading\u2026';
+
+    VRS.getFeedback(200)
+      .then(function (list) {
+        status.textContent = list.length + ' report' + (list.length === 1 ? '' : 's');
+        renderReports(list);
+        var copyBtn = document.getElementById('vrsReportsCopy');
+        copyBtn.onclick = function () {
+          var text = JSON.stringify(list, null, 2);
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(function () {
+              status.className = 'vrs-fb-status vrs-fb-ok';
+              status.textContent = 'Copied ' + list.length + ' reports to the clipboard.';
+            }).catch(function (err) {
+              console.error('VRS: clipboard write failed', err);
+              status.className = 'vrs-fb-status vrs-fb-err';
+              status.textContent = 'Could not copy automatically.';
+            });
+          }
+        };
+      })
+      .catch(function (err) {
+        console.error('VRS: could not load reports', err);
+        status.className = 'vrs-fb-status vrs-fb-err';
+        status.textContent = 'Could not load reports. Your account may not have permission.';
+      });
+  }
+
   function onSignOut() {
     VRS.signOutUser()
       .then(function () {
@@ -1562,6 +1947,15 @@ try {
       if (evt.key === 'Enter') onSignInSubmit();
     });
     els.profileSave.addEventListener('click', onProfileSave);
+    els.googleBtn.addEventListener('click', onGoogleSignIn);
+    els.toggle.addEventListener('click', function () { setSignUpMode(!signUpMode); });
+    els.confirm.addEventListener('keydown', function (evt) {
+      if (evt.key === 'Enter') onSignInSubmit();
+    });
+    var pendingRefresh = document.getElementById('vrsPendingRefresh');
+    if (pendingRefresh) pendingRefresh.addEventListener('click', afterSignedIn);
+    var pendingSignOut = document.getElementById('vrsPendingSignOut');
+    if (pendingSignOut) pendingSignOut.addEventListener('click', onSignOut);
     els.profileTitle.addEventListener('keydown', function (evt) {
       if (evt.key === 'Enter') onProfileSave();
     });
@@ -1577,7 +1971,13 @@ try {
     initFirebase();
     if (!firebaseReady) return;
 
-    VRS.ready()
+    // A Google redirect sign-in lands back here with the result waiting to be
+    // collected. This must run before the auth check, or the user would be
+    // shown the sign-in form again immediately after signing in.
+    VRS.consumeRedirectResult()
+      .then(function () {
+        return VRS.ready();
+      })
       .then(function (uid) {
         if (uid && VRS.isInterpreterAccount()) {
           afterSignedIn();
@@ -1594,6 +1994,20 @@ try {
 
   function onReady() {
     boot();
+    try {
+      VRS.mountFeedbackUi({
+        role: 'interpreter',
+        getRoomId: function () { return roomId; }
+      });
+      var reportBtn = document.getElementById('btnReportProblem');
+      if (reportBtn) reportBtn.addEventListener('click', VRS.openFeedback);
+      var viewBtn = document.getElementById('btnViewReports');
+      if (viewBtn) viewBtn.addEventListener('click', openReportsPanel);
+      var adminBtn = document.getElementById('btnManageAccounts');
+      if (adminBtn) adminBtn.addEventListener('click', openAdminPanel);
+    } catch (err) {
+      console.error('VRS: feedback UI setup failed', err);
+    }
     // Registered unconditionally so the dashboard can be installed to a home
     // screen. subscribeToPush() also registers sw.js, but only once a push
     // endpoint exists — which it does not yet.

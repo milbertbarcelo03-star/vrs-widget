@@ -220,6 +220,8 @@
   }
   #callerNameInput:focus{ outline:2px solid var(--vrs-purple);outline-offset:1px;border-color:var(--vrs-purple); }
 
+  .vrs-fb-triggerwrap{ margin:var(--sp-5) auto 0;max-width:420px;width:100%;text-align:center; }
+
   .vrs-install-hint{
     margin:var(--sp-5) auto 0;max-width:420px;width:100%;
     background:var(--vrs-panel);border:1px solid var(--vrs-border);
@@ -487,7 +489,11 @@
       </div>
     </div>
 
-  <div class="vrs-install-hint" id="installHint" hidden>
+  <div class="vrs-fb-triggerwrap">
+      <button type="button" class="vrs-fb-trigger" id="btnReportProblem">Report a problem with this app</button>
+    </div>
+
+    <div class="vrs-install-hint" id="installHint" hidden>
       <p class="vrs-install-title"><span aria-hidden="true">📲</span> Add this to your Home Screen</p>
       <ol class="vrs-install-steps" id="installStepsIos">
         <li>Tap the Share button <span class="vrs-share-glyph" aria-hidden="true">&#x2191;</span> at the bottom of Safari.</li>
@@ -1415,6 +1421,18 @@ try {
       setupInstallUi();
     } catch (err) {
       console.error('VRS: install UI setup failed', err);
+    }
+    try {
+      // roomId is read lazily: a report filed mid-call should carry the room
+      // it happened in, which is the single most useful field for debugging.
+      VRS.mountFeedbackUi({
+        role: myRole || 'deaf',
+        getRoomId: function () { return roomId; }
+      });
+      var reportBtn = document.getElementById('btnReportProblem');
+      if (reportBtn) reportBtn.addEventListener('click', VRS.openFeedback);
+    } catch (err) {
+      console.error('VRS: feedback UI setup failed', err);
     }
   }
 

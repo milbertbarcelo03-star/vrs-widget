@@ -23,6 +23,15 @@ const path = require('path');
 const APP_URL = 'https://milbertbarcelo03-star.github.io/vrs-widget/interpreter/';
 const APP_ORIGIN = 'https://milbertbarcelo03-star.github.io';
 
+// Google SSO opens a popup on Firebase's auth domain, which then hands off to
+// Google's own sign-in pages. Without these the popup handler below would send
+// sign-in out to the system browser, where it completes in a session this app
+// never sees - the user would click through and land back on the login form.
+const AUTH_ORIGINS = [
+  'https://vrs-widget.firebaseapp.com',
+  'https://accounts.google.com'
+];
+
 let mainWindow = null;
 
 function isTrustedUrl(targetUrl) {
@@ -55,6 +64,22 @@ function createWindow() {
   // External links (help pages, a third party's room link) belong in the real
   // browser, not in a chrome-less window the user cannot navigate back out of.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    let origin = '';
+    try { origin = new URL(url).origin; } catch (err) { /* treat as external */ }
+
+    // Let the sign-in popup open as a real child window.
+    if (AUTH_ORIGINS.includes(origin)) {
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: {
+          width: 520,
+          height: 680,
+          autoHideMenuBar: true,
+          webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true }
+        }
+      };
+    }
+
     shell.openExternal(url);
     return { action: 'deny' };
   });
@@ -63,6 +88,11 @@ function createWindow() {
   // could strand an interpreter on an unrelated page with no address bar and
   // no way back.
   mainWindow.webContents.on('will-navigate', (event, url) => {
+    let origin = '';
+    try { origin = new URL(url).origin; } catch (err) { /* not navigable */ }
+    // A redirect-mode sign-in navigates the main window through these origins
+    // and back, so they must not be treated as "leaving the app".
+    if (AUTH_ORIGINS.includes(origin)) return;
     if (!isTrustedUrl(url)) {
       event.preventDefault();
       shell.openExternal(url);
