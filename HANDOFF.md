@@ -290,19 +290,33 @@ out-of-band:
 
 ## 11. Roadmap
 
-1. Deploy the Cloudflare Worker so interpreters can close the tab.
-2. Confirm Google SSO works in the installed iOS home-screen app. iOS storage
-   partitioning can break redirect-based sign-in there; email/password is
-   unaffected, and `signInWithGoogle()` already falls back from popup to
-   redirect.
+Verified working as of 2026-09-07: 3-way calling, caller names, interpreter
+accounts, admin approval, Google SSO, and problem reports — all against the
+live database, not just locally.
+
+1. Deploy the Cloudflare Worker so interpreters can close the tab. This is the
+   largest remaining gap in day-to-day use: until then the dashboard tab (or
+   the desktop app) has to stay open.
+2. Confirm Google SSO in the **installed iOS home-screen app** specifically.
+   It is confirmed on the web dashboard, but iOS storage partitioning can
+   break redirect-based sign-in inside an installed PWA, and that case has not
+   been tested. Email/password is unaffected either way, and
+   `signInWithGoogle()` already falls back from popup to redirect.
 3. Production hardening: dedicated TURN servers, longer room identifiers, and
    real interpreter credential verification.
-4. Android build via Capacitor. Node and JDK 17 are present; the Android SDK
-   is not. Buildable entirely on Windows.
-5. Only if App Store presence is genuinely required, wrap with Capacitor for
-   iOS. Needs a Mac and 99 USD/year. Note Apple rejects thin web wrappers
-   under Guideline 4.2, so it would need real native push and camera
-   integration. The PWA already covers the iPhone home-screen case for free.
+
+### Deferred by decision (2026-09-07), not blocked
+
+Native mobile builds were scoped and then postponed — the PWA covers the
+iPhone case at no cost, so these are for store presence, nothing more.
+
+- **Android via Capacitor.** Buildable entirely on Windows. Node and JDK 17
+  are already present; only the Android SDK is missing. 25 USD one-time for
+  the Play Store, or sideload the APK for free.
+- **iOS via Capacitor.** Needs a Mac (or a cloud Mac service) and 99 USD/year.
+  Apple rejects thin web wrappers under **Guideline 4.2**, so this would mean
+  real native push and camera integration rather than a wrapper — decide
+  whether store presence is worth that before paying.
 
 ---
 
