@@ -864,6 +864,115 @@ var VRS = (function () {
     return { start: start, stop: stop, peers: peers };
   }
 
+  // ---- Camera mirroring ----------------------------------------------------
+  // Flipping a video horizontally is a CSS transform on the element, so it
+  // changes only what THIS viewer sees. The transmitted stream is untouched and
+  // nobody else's picture changes. That distinction is worth keeping straight:
+  // actually mirroring the outgoing video would need canvas re-encoding, and
+  // for sign language it would be the wrong thing to do anyway.
+  //
+  // Defaults: your own camera is mirrored, everyone else's is not.
+  //
+  // Mirroring matters more here than in an ordinary video app. Reversing a
+  // signer flips their dominant hand, so a right-handed signer reads as
+  // left-handed. Self-view is mirrored because that is what every video app
+  // does and an unmirrored self-view feels wrong to move against. Remote video
+  // is left alone so signs are seen as they were actually produced — but each
+  // tile can still be flipped, because a participant whose own device mirrors
+  // its outgoing video would otherwise appear reversed to everybody.
+
+  var MIRROR_STORAGE_KEY = "vrsMirrorSelf";
+  var mirrorStylesInjected = false;
+
+  function ensureMirrorStyles() {
+    if (mirrorStylesInjected) return;
+    try {
+      var style = document.createElement("style");
+      style.id = "vrs-mirror-style";
+      style.textContent = [
+        ".vrs-mirrored video{transform:scaleX(-1);}",
+        "video.vrs-mirrored{transform:scaleX(-1);}",
+        ".vrs-mirror-btn{position:absolute;top:8px;right:8px;z-index:5;",
+        "width:34px;height:34px;border-radius:8px;cursor:pointer;",
+        "display:flex;align-items:center;justify-content:center;font-size:15px;",
+        "background:rgba(10,18,32,.66);color:#dbe6fa;",
+        "border:1px solid rgba(255,255,255,.18);",
+        "transition:background .15s ease,color .15s ease;}",
+        ".vrs-mirror-btn:hover{background:rgba(10,18,32,.88);color:#fff;}",
+        ".vrs-mirror-btn:focus-visible{outline:2px solid var(--vrs-purple,#b25d22);outline-offset:2px;}",
+        ".vrs-mirror-btn.vrs-on{background:var(--vrs-purple,#b25d22);color:#fff;border-color:var(--vrs-purple-light,#e08a4f);}"
+      ].join("");
+      document.head.appendChild(style);
+      mirrorStylesInjected = true;
+    } catch (err) {
+      console.error("VRS: ensureMirrorStyles failed", err);
+    }
+  }
+
+  // Defaults to true on a device that has never chosen, matching the
+  // convention every other video app uses for a self-view.
+  function isSelfMirrored() {
+    try {
+      var v = localStorage.getItem(MIRROR_STORAGE_KEY);
+      if (v === null) return true;
+      return v === "1";
+    } catch (err) {
+      return true;
+    }
+  }
+
+  function setSelfMirrored(on) {
+    try {
+      localStorage.setItem(MIRROR_STORAGE_KEY, on ? "1" : "0");
+    } catch (err) {
+      console.error("VRS: could not remember mirror preference", err);
+    }
+  }
+
+  // Works on a tile wrapper or directly on a <video>, so the pre-call preview
+  // and the in-call tiles can share one code path.
+  function setTileMirrored(el, on) {
+    if (!el) return;
+    ensureMirrorStyles();
+    if (on) el.classList.add("vrs-mirrored");
+    else el.classList.remove("vrs-mirrored");
+    var btn = el.querySelector ? el.querySelector(".vrs-mirror-btn") : null;
+    if (btn) {
+      btn.setAttribute("aria-pressed", on ? "true" : "false");
+      if (on) btn.classList.add("vrs-on");
+      else btn.classList.remove("vrs-on");
+    }
+  }
+
+  function isTileMirrored(el) {
+    return !!(el && el.classList && el.classList.contains("vrs-mirrored"));
+  }
+
+  // Adds the small flip control to a video tile. onToggle receives the new
+  // state so the caller can persist it for the local tile.
+  function attachMirrorButton(tile, label, onToggle) {
+    try {
+      if (!tile || tile.querySelector(".vrs-mirror-btn")) return;
+      ensureMirrorStyles();
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "vrs-mirror-btn";
+      btn.setAttribute("aria-pressed", "false");
+      btn.setAttribute("aria-label", label || "Mirror this video");
+      btn.title = label || "Mirror this video";
+      btn.textContent = "\u21c4";
+      btn.addEventListener("click", function (evt) {
+        evt.stopPropagation();
+        var next = !isTileMirrored(tile);
+        setTileMirrored(tile, next);
+        if (typeof onToggle === "function") onToggle(next);
+      });
+      tile.appendChild(btn);
+    } catch (err) {
+      console.error("VRS: attachMirrorButton failed", err);
+    }
+  }
+
   // ---- Feedback / problem reports ------------------------------------------
   // Users report issues from inside the app rather than having to email
   // someone. Reports land in the database, where they can be read back and
@@ -1390,6 +1499,12 @@ var VRS = (function () {
     isStale: isStale,
     createMesh: createMesh,
     iceServerConfig: iceServerConfig,
+    isSelfMirrored: isSelfMirrored,
+    setSelfMirrored: setSelfMirrored,
+    setTileMirrored: setTileMirrored,
+    isTileMirrored: isTileMirrored,
+    attachMirrorButton: attachMirrorButton,
+    ensureMirrorStyles: ensureMirrorStyles,
     submitFeedback: submitFeedback,
     getFeedback: getFeedback,
     markFeedbackHandled: markFeedbackHandled,

@@ -109,6 +109,21 @@ Browser C (third party)  --+
   reports**, with "Copy all as JSON".
 - **Windows desktop app** (`desktop/`). Electron wrapper around the deployed
   dashboard URL. See section 12.
+- **Camera mirroring.** A Mirror button in the control bar flips your own
+  camera, and every video tile has its own flip control. Your self-view is
+  mirrored by default; everyone else is not.
+
+  This matters more here than in an ordinary video app. Flipping a signer
+  reverses their dominant hand, so a right-handed signer reads as left-handed.
+  Self-view is mirrored because that is what every video app does and signing
+  against an unmirrored self-view feels wrong; remote video is left alone so
+  signs are seen as they were produced. The per-tile control exists because a
+  participant whose own device mirrors its outgoing video would otherwise
+  appear reversed to everybody, and only the viewer can correct that.
+
+  It is a CSS transform, so it changes only what that viewer sees — the
+  transmitted stream is untouched. Genuinely mirroring the outgoing video
+  would need canvas re-encoding and would be the wrong thing to do anyway.
 
 ### Built but NOT deployed
 - **Web push** (`sw.js`, `manifest.json`, `worker/`). Completely inert until

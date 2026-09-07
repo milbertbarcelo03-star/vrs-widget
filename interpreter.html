@@ -499,6 +499,7 @@
       <div id="controlBar">
         <button type="button" class="vrs-ctrl-btn" id="btnToggleMic"><span class="vrs-ctrl-icon">🎤</span>Mute</button>
         <button type="button" class="vrs-ctrl-btn" id="btnToggleCam"><span class="vrs-ctrl-icon">📷</span>Camera</button>
+        <button type="button" class="vrs-ctrl-btn" id="btnToggleMirror" aria-pressed="true"><span class="vrs-ctrl-icon">&#8644;</span>Mirror</button>
         <button type="button" class="vrs-ctrl-btn" id="btnToggleChat"><span class="vrs-ctrl-icon">💬</span>Chat<span id="chatUnreadBadge" hidden>0</span></button>
         <button type="button" class="vrs-ctrl-btn vrs-ctrl-danger" id="btnEndCall"><span class="vrs-ctrl-icon">📞</span>Leave</button>
       </div>
@@ -620,6 +621,7 @@ try {
   var videoGrid = document.getElementById('videoGrid');
   var btnToggleMic = document.getElementById('btnToggleMic');
   var btnToggleCam = document.getElementById('btnToggleCam');
+  var btnToggleMirror = document.getElementById('btnToggleMirror');
   var btnToggleChat = document.getElementById('btnToggleChat');
   var chatUnreadBadge = document.getElementById('chatUnreadBadge');
   var btnEndCall = document.getElementById('btnEndCall');
@@ -1238,7 +1240,40 @@ try {
       '<div class="vrs-tile-overlay"><span class="vrs-dot vrs-dot-pending"></span><span class="vrs-tile-label"></span></div>' +
       '<div class="vrs-tile-nomedia"><span aria-hidden="true">🎤</span><span>Camera off</span></div>';
     tile.querySelector('.vrs-tile-label').textContent = label;
+
+    // Every tile gets its own flip control. The local one is the common case,
+    // but a remote participant whose device mirrors its outgoing video would
+    // otherwise appear reversed here, which for a signer reverses their
+    // dominant hand.
+    if (key === 'local') {
+      VRS.attachMirrorButton(tile, 'Mirror my camera', function (on) {
+        VRS.setSelfMirrored(on);
+        syncMirrorButton();
+      });
+      VRS.setTileMirrored(tile, VRS.isSelfMirrored());
+    } else {
+      VRS.attachMirrorButton(tile, 'Mirror this video', null);
+    }
     return tile;
+  }
+
+  // Keeps the control-bar button in step with the tile button, since either
+  // can change the same setting.
+  function syncMirrorButton() {
+    var on = VRS.isSelfMirrored();
+    if (btnToggleMirror) {
+      btnToggleMirror.classList.toggle('vrs-ctrl-off', !on);
+      btnToggleMirror.setAttribute('aria-pressed', on ? 'true' : 'false');
+    }
+  }
+
+  function onToggleMirrorTap() {
+    var next = !VRS.isSelfMirrored();
+    VRS.setSelfMirrored(next);
+    var localTile = videoGrid.querySelector('[data-peer="local"]');
+    if (localTile) VRS.setTileMirrored(localTile, next);
+    // no pre-call preview on the dashboard
+    syncMirrorButton();
   }
 
   function updateGridLayout() {
@@ -1413,6 +1448,8 @@ try {
 
     btnToggleMic.addEventListener('click', onToggleMicTap);
     btnToggleCam.addEventListener('click', onToggleCamTap);
+    if (btnToggleMirror) btnToggleMirror.addEventListener('click', onToggleMirrorTap);
+    syncMirrorButton();
     btnToggleChat.addEventListener('click', onToggleChatTap);
     btnCloseChat.addEventListener('click', onToggleChatTap);
     btnEndCall.addEventListener('click', endCall);
