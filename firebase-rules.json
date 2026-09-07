@@ -6,8 +6,23 @@
     "_vrsProto_mariana47": {
       "signalingRoot9x": {
 
+        "interpreters": {
+          "$uid": {
+            "//": "Profiles are readable by callers so the app can show who they are connected to, but only the signed-in interpreter can write their own.",
+            ".read": "auth != null",
+            ".write": "auth != null && auth.uid == $uid",
+
+            "displayName": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 60" },
+            "title":       { ".validate": "newData.isString() && newData.val().length <= 60" },
+            "createdAt":   { ".validate": "newData.isNumber()" },
+            "lastSeenAt":  { ".validate": "newData.isNumber()" },
+            "$other":      { ".validate": false }
+          }
+        },
+
         "queue": {
-          ".read": "auth != null",
+          "//": "Only real interpreter accounts (email/password) may see who is waiting. Anonymous callers can add themselves but cannot read the queue.",
+          ".read": "auth != null && auth.token.firebase.sign_in_provider == 'password'",
 
           "$roomId": {
             ".write": "auth != null",
@@ -17,6 +32,7 @@
             "createdAt":  { ".validate": "newData.isNumber()" },
             "status":     { ".validate": "newData.isString() && newData.val().length <= 24" },
             "callerRole": { ".validate": "newData.isString() && newData.val().length <= 24" },
+            "callerName": { ".validate": "newData.isString() && newData.val().length <= 40" },
             "hasCamera":  { ".validate": "newData.isBoolean()" },
             "$other":     { ".validate": false }
           }
@@ -34,6 +50,8 @@
             "status":        { ".validate": "newData.isString() && newData.val().length <= 24" },
             "deafId":        { ".validate": "newData.isString() && newData.val().length <= 64" },
             "interpreterId": { ".validate": "newData.isString() && newData.val().length <= 64" },
+            "callerName":      { ".validate": "newData.isString() && newData.val().length <= 40" },
+            "interpreterName": { ".validate": "newData.isString() && newData.val().length <= 60" },
             "thirdId":       { ".validate": "newData.isString() && newData.val().length <= 64" },
             "hasCamera":     { ".validate": "newData.isBoolean()" },
 
