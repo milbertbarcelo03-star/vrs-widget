@@ -423,6 +423,23 @@
     border:1px solid var(--vrs-border)!important;
     box-shadow:none!important;margin-top:var(--sp-3)!important;
   }
+  .vrs-precall-head{
+    display:flex;align-items:center;justify-content:space-between;
+    gap:var(--sp-3);flex-wrap:wrap;margin-bottom:var(--sp-5);
+  }
+  .vrs-precall-head .vrs-brand{ margin-bottom:0; }
+  .vrs-account-bar{
+    display:flex;align-items:center;gap:var(--sp-3);
+  }
+  .vrs-account-bar[hidden]{ display:none; }
+  .vrs-account-who{ font-size:var(--fs-xs);color:var(--vrs-muted); }
+  .vrs-account-signout{
+    background:none;border:none;color:var(--vrs-muted);font-size:var(--fs-xs);
+    text-decoration:underline;cursor:pointer;padding:var(--sp-2) 0;min-height:36px;
+  }
+  .vrs-account-signout:hover{ color:var(--vrs-text); }
+  .vrs-account-signout:focus-visible{ outline:2px solid var(--vrs-purple);outline-offset:2px; }
+
   .vrs-guest-note{
     margin:var(--sp-2) 0 0!important;font-size:var(--fs-xs)!important;
     color:var(--vrs-muted);
@@ -986,7 +1003,13 @@
   </section>
 
   <section id="screen-precall" class="vrs-screen" hidden>
-    <div class="vrs-brand"><span class="vrs-dot-brand" aria-hidden="true"></span><span class="vrs-brand-vrs">SignBridge</span><span class="vrs-brand-sep">&middot;</span><span class="vrs-brand-org">Beta</span></div>
+    <div class="vrs-precall-head">
+      <div class="vrs-brand"><span class="vrs-dot-brand" aria-hidden="true"></span><span class="vrs-brand-vrs">SignBridge</span><span class="vrs-brand-sep">&middot;</span><span class="vrs-brand-org">Beta</span></div>
+      <div class="vrs-account-bar" id="accountBar" hidden>
+        <span class="vrs-account-who" id="accountWho"></span>
+        <button type="button" class="vrs-account-signout" id="btnStudentSignOut">Sign out</button>
+      </div>
+    </div>
     <h1 class="vrs-title" id="precallTitle">Call a Sign Language Interpreter</h1>
     <p class="vrs-subtitle" id="precallSubtitle">Turn on your camera and microphone, then start the call. You can continue without a camera if needed.</p>
 
@@ -2701,6 +2724,14 @@ try {
   }
 
   function onSignOut() {
+    // Signing out during a live call would otherwise leave the other person
+    // watching a frozen tile: the page reloads and the peer connection dies
+    // without anyone leaving the room properly.
+    try {
+      if (activeScreenName === 'call' || roomId) endCall();
+    } catch (err) {
+      console.error('VRS: could not end call before signing out', err);
+    }
     VRS.signOutUser()
       .then(function () {
         // A full reload is the simplest way to tear down every open listener,
@@ -2727,6 +2758,8 @@ try {
     els.googleBtn.addEventListener('click', onGoogleSignIn);
     var guestBtn = document.getElementById('vrsGuestBtn');
     if (guestBtn) guestBtn.addEventListener('click', onGuestSignIn);
+    var studentOut = document.getElementById('btnStudentSignOut');
+    if (studentOut) studentOut.addEventListener('click', onSignOut);
     els.toggle.addEventListener('click', function () { setSignUpMode(!signUpMode); });
     els.confirm.addEventListener('keydown', function (evt) {
       if (evt.key === 'Enter') onSignInSubmit();
@@ -2856,6 +2889,21 @@ try {
       return;
     }
     showScreen('precall');
+
+    var bar = document.getElementById('accountBar');
+    var who = document.getElementById('accountWho');
+    var user = VRS.currentAuthUser();
+    if (who) {
+      // A guest has no name or email to show, and should be told plainly that
+      // this session is temporary.
+      who.textContent = (user && user.isAnonymous)
+        ? 'Signed in as Guest'
+        : 'Signed in as ' + (
+            (studentProfile && studentProfile.displayName) ||
+            (user && user.email) || 'student'
+          );
+    }
+    if (bar) bar.hidden = false;
 
     var nameEl = document.getElementById('callerNameInput');
     if (nameEl && studentProfile && studentProfile.displayName && !nameEl.value) {
