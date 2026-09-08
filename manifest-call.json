@@ -1,16 +1,26 @@
 {
   "id": "vrs-call",
-  "name": "VRS Call — Career Tech High Academy",
-  "short_name": "VRS Call",
+  "name": "VRS \u00b7 Career Tech High Academy",
+  "short_name": "VRS",
   "description": "Start a video call with a sign language interpreter.",
-  "start_url": "./call.html",
+  "start_url": "./app.html",
   "scope": "./",
   "display": "standalone",
   "background_color": "#0a1220",
   "theme_color": "#0a1220",
   "orientation": "any",
   "icons": [
-    { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
   ]
 }

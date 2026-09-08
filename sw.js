@@ -19,10 +19,11 @@
 
 // Bump this on every deploy that changes a precached file, otherwise old
 // clients keep their previous copy until the cache is evicted.
-var VRS_CACHE = 'vrs-shell-v1';
+var VRS_CACHE = 'vrs-shell-v2';
 
 var VRS_SHELL = [
   './',
+  './app.html',
   './call.html',
   './interpreter.html',
   './shared.js',
@@ -106,7 +107,7 @@ self.addEventListener('fetch', function (event) {
             // A navigation to a URL we never cached (e.g. /call/) still needs
             // to render something rather than the browser's offline error.
             if (req.mode === 'navigate') {
-              return caches.match('./call.html');
+              return caches.match('./app.html');
             }
             return Response.error();
           });
@@ -148,7 +149,7 @@ self.addEventListener('notificationclick', function (event) {
             }
           }
           if (self.clients.openWindow) {
-            return self.clients.openWindow(new URL('./interpreter.html', self.registration.scope));
+            return self.clients.openWindow(new URL('./app.html', self.registration.scope));
           }
         })
     );

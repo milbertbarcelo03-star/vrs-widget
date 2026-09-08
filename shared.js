@@ -864,6 +864,59 @@ var VRS = (function () {
     return { start: start, stop: stop, peers: peers };
   }
 
+  // ---- Student profiles ----------------------------------------------------
+  // Students hold real accounts. Unlike interpreters there is no approval
+  // step: approval protects deaf callers from strangers ANSWERING calls, and
+  // gating the callers themselves would put a wall in front of the people the
+  // service exists for.
+
+  function getStudentProfile(uid) {
+    return ref("students/" + uid)
+      .once("value")
+      .then(function (snap) {
+        return snap.val();
+      });
+  }
+
+  function saveStudentProfile(uid, profile) {
+    var payload = {
+      displayName: String((profile && profile.displayName) || "").slice(0, 60),
+      lastSeenAt: nowTs()
+    };
+    payload.createdAt = (profile && profile.createdAt) || nowTs();
+    var authUser = currentAuthUser();
+    if (authUser && authUser.email) payload.email = String(authUser.email).slice(0, 120);
+    return ref("students/" + uid).update(payload);
+  }
+
+  function touchStudent(uid) {
+    return ref("students/" + uid)
+      .update({ lastSeenAt: nowTs() })
+      .catch(function (err) {
+        console.error("VRS: touchStudent failed", err);
+      });
+  }
+
+  // Works out what an already-signed-in account is, so a returning user lands
+  // straight in their own side of the app instead of picking a role again.
+  //
+  // Resolves to "student", "interpreter", or null when the account has neither
+  // profile yet (a fresh sign-up that has not chosen). An anonymous session is
+  // always null: those are third parties who joined by room link.
+  function detectUserRole(uid) {
+    if (!uid) return Promise.resolve(null);
+    var user = currentAuthUser();
+    if (user && user.isAnonymous) return Promise.resolve(null);
+    return Promise.all([
+      getInterpreterProfile(uid).catch(function () { return null; }),
+      getStudentProfile(uid).catch(function () { return null; })
+    ]).then(function (results) {
+      if (results[0]) return "interpreter";
+      if (results[1]) return "student";
+      return null;
+    });
+  }
+
   // ---- Camera mirroring ----------------------------------------------------
   // Flipping a video horizontally is a CSS transform on the element, so it
   // changes only what THIS viewer sees. The transmitted stream is untouched and
@@ -1473,6 +1526,10 @@ var VRS = (function () {
     currentUid: currentUid,
     isInterpreterAccount: isInterpreterAccount,
     getInterpreterProfile: getInterpreterProfile,
+    getStudentProfile: getStudentProfile,
+    saveStudentProfile: saveStudentProfile,
+    touchStudent: touchStudent,
+    detectUserRole: detectUserRole,
     saveInterpreterProfile: saveInterpreterProfile,
     touchInterpreter: touchInterpreter,
     isFirebaseConfigured: isFirebaseConfigured,

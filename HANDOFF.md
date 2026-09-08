@@ -64,8 +64,8 @@ Browser C (third party)  --+
 |---|---|
 | `index.html` | Customer demo page, styled to mimic careertechguam.org. Embeds the widget. |
 | `widget.js` | The embeddable script. One script tag injects a floating call button plus a full-screen iframe modal. Themeable via `data-color` / `data-color-dark`. |
-| `call.html` | Caller UI: precall and camera preview, ringing, 3-way video grid, chat, add-third-party. |
-| `interpreter.html` | Interpreter dashboard: access gate, online toggle, waiting room, incoming-call overlay, in-call UI. |
+| `app.html` | **The app.** One page for everyone: role chooser, sign-in for students and interpreters, caller flow, interpreter dashboard, and the shared in-call experience. |
+| `call.html`, `interpreter.html` | Redirect stubs into `app.html`, preserving the query string. They exist only so existing entry points keep working: installed phone apps, the desktop build, `widget.js`, and invite links already shared. Do not delete them. |
 | `shared.js` | Firebase config and init, anonymous auth, all signalling helpers, the WebRTC mesh manager, ICE server config. **The heart of the app.** |
 | `sw.js` | Service worker for web push (payload-less push, generic notification). |
 | `manifest.json` | PWA manifest for the **interpreter** app. Also required for iOS web push. |
@@ -99,6 +99,11 @@ Browser C (third party)  --+
 - **Identity.** Callers give an optional first name, remembered on the device.
   Interpreters have real accounts (email/password or Google SSO) and set a
   display name and title, which the caller sees while the call connects.
+- **Students hold accounts.** Students sign in (Google SSO or email/password)
+  and get a `students/$uid` profile. Deliberately **no approval gate**:
+  approval exists so a stranger cannot RECEIVE calls, which does not apply to
+  callers, and a pending screen in front of someone who needs an interpreter
+  would be harmful.
 - **Self-signup with admin approval.** Anyone can create an interpreter
   account, but it cannot read the call queue until an admin approves it via
   **Manage accounts**. See SECURITY.md for why open signup would otherwise be
@@ -129,6 +134,36 @@ Browser C (third party)  --+
 - **Web push** (`sw.js`, `manifest.json`, `worker/`). Completely inert until
   `VRS_PUSH_ENDPOINT` in `shared.js` points at a deployed Cloudflare Worker.
   Follow `PUSH-SETUP.md`. Until then the interpreter must keep the tab open.
+
+### One app, two roles
+
+`call.html` and `interpreter.html` were merged into **`app.html`**. They had
+drifted into 3,573 lines with **23 duplicated functions** — the entire in-call
+experience existed twice, and every feature had to be written and patched
+twice.
+
+The merged app opens on a role chooser (**I am a Student** / **I am an
+Interpreter**), then shows the matching sign-in. Two shells live in one page:
+the dashboard chrome (topbar + `<main>`) for interpreters, and the caller
+screens for students. `applyRoleShell()` shows exactly one; `showScreen()` is
+the single screen manager.
+
+Traps found during the merge, all still relevant:
+
+- The two files declared many of the same element variables. A duplicate
+  `var` is a SyntaxError that silently kills the whole inline script, so the
+  merge script only carried across names the other file did not already have.
+- `wireUpUI` existed in both with different bodies. Only one could keep the
+  name; the caller's became `wireUpCallerUI()`. Losing it silently leaves
+  every caller control unwired.
+- Appending the caller stylesheet re-declared `#screen-call` as
+  `display:flex`, cancelling the dashboard's `display:none` so the call screen
+  never hid. The duplicate rule was removed.
+- The caller screens must sit **inside `#app`**. Outside it they miss the flex
+  column and `100dvh` that `.vrs-screen` depends on.
+- A third party arriving on a room link gets an anonymous session and skips
+  the role chooser entirely. They were vouched for by whoever shared the code,
+  and have no account.
 
 ### Identity — code complete, BLOCKED on a console step
 
@@ -364,3 +399,13 @@ Gotchas already hit:
   containing `electron.exe`.
 - The build is unsigned, so SmartScreen warns on first run. A code-signing
   certificate is roughly 200-400 USD/year.
+
+---
+
+## 13. Open action items
+
+- **`widget.js` is untouched and still embeds `call.html`**, which now
+  redirects into `app.html`. It works, but it was written for the old
+  two-page layout and should be revisited before the school embeds it again.
+- **Android / iOS native builds** remain deferred; see section 11.
+- **Web push** is still undeployed, so an interpreter must keep the app open.

@@ -14,6 +14,30 @@
           }
         },
 
+        "students": {
+          // Students hold accounts so the school has a roster and the
+          // interpreter sees a real name rather than a room number.
+          //
+          // Deliberately NO approval gate. Approval exists so a stranger
+          // cannot RECEIVE calls from deaf students; it makes no sense to
+          // apply it to the students themselves, and a pending-approval wall
+          // in front of someone who needs an interpreter would be harmful.
+          // A student can call the moment they sign in.
+          "$uid": {
+            // Readable by any signed-in user so an interpreter can see who is
+            // calling before accepting.
+            ".read": "auth != null",
+
+            // Per-field .write, matching interpreters/$uid. Rules cascade, so
+            // a .write on $uid would also cover any field added later.
+            "displayName": { ".write": "auth != null && auth.uid == $uid", ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 60" },
+            "email":       { ".write": "auth != null && auth.uid == $uid", ".validate": "newData.isString() && newData.val().length <= 120" },
+            "createdAt":   { ".write": "auth != null && auth.uid == $uid", ".validate": "newData.isNumber()" },
+            "lastSeenAt":  { ".write": "auth != null && auth.uid == $uid", ".validate": "newData.isNumber()" },
+            "$other":      { ".validate": false }
+          }
+        },
+
         "interpreters": {
           // Any signed-in user may read profiles: callers are shown who they
           // are connected to, and admins need to list pending accounts.

@@ -20,7 +20,7 @@
 const { app, BrowserWindow, shell, session } = require('electron');
 const path = require('path');
 
-const APP_URL = 'https://milbertbarcelo03-star.github.io/vrs-widget/interpreter/';
+const APP_URL = 'https://milbertbarcelo03-star.github.io/vrs-widget/app.html';
 const APP_ORIGIN = 'https://milbertbarcelo03-star.github.io';
 
 // Google SSO opens a popup on Firebase's auth domain, which then hands off to
