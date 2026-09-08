@@ -1,7 +1,7 @@
 {
   "id": "vrs-interpreter",
-  "name": "VRS Interpreter Dashboard",
-  "short_name": "VRS Interp",
+  "name": "SignBridge Interpreter \u00b7 Beta",
+  "short_name": "SignBridge Int",
   "description": "Answer incoming sign language relay calls.",
   "start_url": "./app.html",
   "scope": "./",

@@ -49,7 +49,7 @@ function createWindow() {
     minWidth: 900,
     minHeight: 640,
     backgroundColor: '#0a1220', // matches --vrs-bg so there is no white flash
-    title: 'VRS Interpreter',
+    title: 'SignBridge Interpreter',
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),

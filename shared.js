@@ -189,6 +189,48 @@ var VRS = (function () {
     }
   }
 
+  // Guest access, offered on the student side only.
+  //
+  // An anonymous session: no account, no password, nothing to forget. This is
+  // the escape hatch for the case student accounts would otherwise create -
+  // someone who needs an interpreter now and cannot get past a login. A guest
+  // can place a call and nothing else; they cannot read the queue or reports,
+  // because those require an approved interpreter account.
+  function signInAsGuest() {
+    try {
+      return firebase
+        .auth()
+        .signInAnonymously()
+        .then(function (cred) {
+          authPromise = Promise.resolve(cred.user.uid);
+          return cred.user;
+        });
+    } catch (err) {
+      return Promise.reject(err);
+    }
+  }
+
+  // Guest access, offered on the student side only.
+  //
+  // An anonymous session: no account, no password, nothing to forget. This is
+  // the escape hatch for the case student accounts would otherwise create -
+  // someone who needs an interpreter now and cannot get past a login. A guest
+  // can place a call and nothing else; they cannot read the queue or reports,
+  // because those require an approved interpreter account.
+  function signInAsGuest() {
+    try {
+      return firebase
+        .auth()
+        .signInAnonymously()
+        .then(function (cred) {
+          authPromise = Promise.resolve(cred.user.uid);
+          return cred.user;
+        });
+    } catch (err) {
+      return Promise.reject(err);
+    }
+  }
+
   function signOutUser() {
     try {
       return firebase.auth().signOut();
@@ -1515,6 +1557,8 @@ var VRS = (function () {
     init: init,
     ready: ready,
     signInWithEmail: signInWithEmail,
+    signInAsGuest: signInAsGuest,
+    signInAsGuest: signInAsGuest,
     signUpWithEmail: signUpWithEmail,
     signInWithGoogle: signInWithGoogle,
     consumeRedirectResult: consumeRedirectResult,

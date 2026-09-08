@@ -1,7 +1,7 @@
 {
   "id": "vrs-call",
-  "name": "VRS \u00b7 Career Tech High Academy",
-  "short_name": "VRS",
+  "name": "SignBridge \u00b7 Beta",
+  "short_name": "SignBridge",
   "description": "Start a video call with a sign language interpreter.",
   "start_url": "./app.html",
   "scope": "./",
