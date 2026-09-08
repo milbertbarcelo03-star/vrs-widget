@@ -2,7 +2,7 @@
   "id": "vrs-interpreter",
   "name": "SignBridge Interpreter \u00b7 Beta",
   "short_name": "SignBridge Int",
-  "description": "Answer incoming sign language relay calls.",
+  "description": "Answer incoming sign language interpreting calls.",
   "start_url": "./app.html",
   "scope": "./",
   "display": "standalone",

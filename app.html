@@ -1011,7 +1011,7 @@
       </div>
     </div>
     <h1 class="vrs-title" id="precallTitle">Call a Sign Language Interpreter</h1>
-    <p class="vrs-subtitle" id="precallSubtitle">Turn on your camera and microphone, then start the call. You can continue without a camera if needed.</p>
+    <p class="vrs-subtitle" id="precallSubtitle">Turn on your camera and microphone, then start the call. Good lighting on your face and hands helps the interpreter see you clearly.</p>
 
     <div class="vrs-name-field">
       <label for="callerNameInput">Your first name (optional)</label>
@@ -1086,7 +1086,7 @@
       <ol class="vrs-install-steps" id="installStepsIos">
         <li>Tap the Share button <span class="vrs-share-glyph" aria-hidden="true">&#x2191;</span> at the bottom of Safari.</li>
         <li>Scroll down and tap <strong>Add to Home Screen</strong>.</li>
-        <li>Tap <strong>Add</strong>. VRS Call opens like an app from then on.</li>
+        <li>Tap <strong>Add</strong>. SignBridge opens like an app from then on.</li>
       </ol>
       <div id="installStepsGeneric" hidden>
         <p class="vrs-install-steps" style="padding-left:0;">Install VRS Call so it opens straight from your home screen.</p>
@@ -1143,7 +1143,7 @@
   <div class="vrs-gate-card" id="vrsRoleCard" hidden>
     <div class="vrs-emoji-big" aria-hidden="true">🤟</div>
     <h2>Welcome</h2>
-    <p>Sign language video relay. Choose how you are signing in.</p>
+    <p>Sign language interpreting, on video. Choose how you are signing in.</p>
     <button type="button" id="vrsRoleStudent" class="vrs-gate-btn">I am a Student</button>
     <button type="button" id="vrsRoleInterpreter" class="vrs-gate-btn vrs-gate-alt">I am an Interpreter</button>
   </div>
@@ -1733,7 +1733,7 @@ try {
 
     try {
       if ('Notification' in window && Notification.permission === 'granted') {
-        alertNotification = new Notification('Incoming VRS call', {
+        alertNotification = new Notification('Incoming SignBridge call', {
           body: 'Room ' + roomLabel + ' — a deaf caller needs an interpreter.',
           tag: 'vrs-incoming',
           requireInteraction: true
@@ -3136,7 +3136,7 @@ try {
 
     if (myRole === 'deaf') {
       precallTitle.textContent = 'Call a Sign Language Interpreter';
-      precallSubtitle.textContent = 'Turn on your camera and microphone, then start the call. You can continue without a camera if needed.';
+      precallSubtitle.textContent = 'Turn on your camera and microphone, then start the call. Good lighting on your face and hands helps the interpreter see you clearly.';
     } else if (myRole === 'interpreter') {
       precallTitle.textContent = 'Join as Interpreter';
       precallSubtitle.textContent = 'Interpreters normally receive calls from the dashboard, but you can join a specific room directly here.';

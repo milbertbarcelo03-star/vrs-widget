@@ -2,3 +2,9 @@ vrs-widget-package.zip
 vapid-keys.local.txt
 *.local.txt
 .dev.vars
+
+# Internal planning document. Kept out of the repo on purpose: this repo is
+# public, and COMPLIANCE.html contains a candid inventory of the service's own
+# weaknesses plus notes on student-data handling. Publishing a list of your own
+# gaps to the open internet is a decision to make deliberately, not by default.
+COMPLIANCE.html

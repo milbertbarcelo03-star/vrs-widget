@@ -121,7 +121,7 @@ self.addEventListener('fetch', function (event) {
 self.addEventListener('push', function (event) {
   try {
     event.waitUntil(
-      self.registration.showNotification('📞 Incoming VRS call', {
+      self.registration.showNotification('📞 Incoming SignBridge call', {
         body: 'A deaf caller needs an interpreter. Tap to open the dashboard.',
         tag: 'vrs-incoming',
         requireInteraction: true,
