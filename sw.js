@@ -19,7 +19,7 @@
 
 // Bump this on every deploy that changes a precached file, otherwise old
 // clients keep their previous copy until the cache is evicted.
-var VRS_CACHE = 'vrs-shell-v2';
+var VRS_CACHE = 'vrs-shell-v3';
 
 var VRS_SHELL = [
   './',
@@ -87,8 +87,17 @@ self.addEventListener('fetch', function (event) {
     // entirely alone — see the header comment.
     if (url.origin !== self.location.origin) return;
 
+    // Network-first is only half the job: fetch() consults the browser's own
+    // HTTP cache, which happily returns a stale page and hides a deployed fix
+    // from the very people who need it. Bypass that cache for code, and let
+    // the offline fallback below handle being disconnected.
+    var isCode = req.mode === 'navigate' ||
+                 /\.(?:html|js|json)$/.test(url.pathname) ||
+                 url.pathname.endsWith('/');
+    var request = isCode ? new Request(req, { cache: 'reload' }) : req;
+
     event.respondWith(
-      fetch(req)
+      fetch(request)
         .then(function (res) {
           // Only cache real, complete responses.
           if (res && res.status === 200 && res.type === 'basic') {

@@ -1269,6 +1269,9 @@ try {
   var authRole = null;
   var activeScreenName = null;
   var ringingTimerHandle = null;
+  var ringingStartTs = null;
+  var interpreterDisplayName = null;
+  var installPromptEvent = null;
   var screens = {};
 
   // myId encodes the role, and the mesh picks its offer/answer side by
@@ -2903,7 +2906,10 @@ try {
             (user && user.email) || 'student'
           );
     }
-    if (bar) bar.hidden = false;
+    // Hidden for a link-invited third party: they never signed in, so
+    // "Sign out" would only strand them at the role chooser with no way back
+    // into the call they were invited to.
+    if (bar) bar.hidden = isThirdPartyLink();
 
     var nameEl = document.getElementById('callerNameInput');
     if (nameEl && studentProfile && studentProfile.displayName && !nameEl.value) {
@@ -3279,8 +3285,13 @@ try {
       enterRingingScreen();
     }).catch(function (err) {
       console.error('VRS: failed to start call', err);
+      // Without this the caller sits on "Calling interpreter" forever, waiting
+      // for a call that was never actually placed.
+      showScreen('precall');
+      if (ringingTimerHandle) { clearInterval(ringingTimerHandle); ringingTimerHandle = null; }
       setPrecallStatus('Could not start the call. Please try again.');
       btnStartCall.disabled = false;
+      btnStartCall.hidden = false;
     });
   }
 
