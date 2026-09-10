@@ -249,6 +249,11 @@ Notes that cost real debugging time if forgotten:
 | Live call **torn down mid-conversation** | The mesh pruned peers whenever the participants snapshot arrived empty, which happens transiently. | Only prune when the snapshot actually lists someone. |
 | WebRTC offers silently never delivered | Signal keys have the form `{fromId}_{toId}`, but peer ids themselves contain underscores, so splitting on `_` produced garbage ids. | Read the explicit `from` and `to` fields stored on the payload instead of parsing the key. |
 
+| **Caller stuck on "Calling interpreter" after the interpreter accepted** | The merge kept the dashboard's `enterCallScreen`, which hides the interpreter waiting room, not the caller's ringing screen. The shared call screen was also inside `<main>`, which is hidden for students. | One `enterCallScreen` for both roles, driven by `showScreen()`; call screen moved out of `<main>`. |
+| **Placing a call failed outright; ring timer frozen at 0:00** | `ringingStartTs`, `interpreterDisplayName` and `installPromptEvent` were declared in the old `call.html` but never carried into `app.html` — the merge script only copied `var x = document.getElementById(...)` lines. Each threw a ReferenceError the first time its path ran. | Declared alongside the other state variables. **When merging files, diff *all* top-level declarations, not just element lookups.** |
+| **A failed call still showed the ringing screen** | `startCall`'s catch set a status message but left the caller on a screen waiting for a call that was never placed. | The catch returns to the pre-call screen and re-enables the button. |
+| **A deployed fix did not reach users** | The service worker was network-first, but `fetch()` still consulted the browser HTTP cache and returned a stale page. | Code requests bypass the HTTP cache (`cache: 'reload'`); the offline fallback is untouched. |
+
 ### Diagnosis technique that worked
 
 When calls misbehave, **rule out the security rules first.** Mint an anonymous
